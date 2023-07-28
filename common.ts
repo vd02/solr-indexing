@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 export class Common {
     public static GetUrl(title: any): string {
         let strUrl: string = title.toString();
@@ -188,6 +190,52 @@ export class Common {
     public static StringOnly(value: string): string {
         return value.replace(/\d{18}/g, " ");
     }
+
+    public static GetMetaTag(fullcontent: string): string {
+        const regexheader = /<header>(.*?)<\/header>/gs;
+        const objHeader: string[] = [];
+        const matchesheader = fullcontent.match(regexheader);
+
+        if (matchesheader !== null) {
+            matchesheader.forEach((matchhead) => {
+                objHeader.push(matchhead);
+            });
+        }
+
+        return objHeader.join("");
+    }
+
+
+    public static RemovedHeaderTag(fullContent: string): string {
+        const regexHeader = /<header>(.*?)<\/header>/gi;
+        return fullContent.replace(regexHeader, "");
+    }
+
+
+    public static LogErrorId(Id: string): void {
+        try {
+            const spath = process.env.logPath; // Assuming you have set the logPath environment variable
+            const filePath = path.join(
+                spath,
+                `LogErrorId${new Date().toISOString().slice(0, 10)}.txt`
+            );
+
+            if (!fs.existsSync(spath)) {
+                fs.mkdirSync(spath);
+            }
+
+            const strLogText = `${Id},`;
+
+            if (!fs.existsSync(filePath)) {
+                fs.writeFileSync(filePath, strLogText);
+            } else {
+                fs.appendFileSync(filePath, strLogText);
+            }
+        } catch (ex) {
+            // Handle the error here if necessary
+        }
+    }
+
 
 }
 

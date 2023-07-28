@@ -47,7 +47,6 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         console.error('S3 upload error for MID = ' + dr['mid'], ex);
                     }
 
-                    // Check and set the year property
                     const year: string = dr['year'].toString().trim();
                     if (year !== '') {
                         indexDocument.year = { id: year, name: year };
@@ -1911,16 +1910,134 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                     //#endregion
 
-                } catch (ex) {
-                    // Handle the exception
-                    console.error(ex.message);
+
+                    //#region remove header tag from full content
+                    if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    //#endregion
+                    //#region xml meta tag
+                    if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
+                        indexDocument.xmltag = Common.GetMetaTag(String(dr["fullcontent"]));
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    //#endregion
+                    //#region wordPhraseIds
+                    const wordPhraseIds: string[] = dr["CrossTagging"]
+                        .toString()
+                        .split(" ")
+                        .filter((x) => !!x.trim());
+                    indexDocument.wordphraseids = wordPhraseIds;
+                    //#endregion
+                    indexDocument.fullcontent = fullContent.trim().lastIndexOf("</document>") !== -1
+                        ? fullContent.trim().replace(
+                            "</document>",
+                            "<div id='xmlmetadata' style='display:none;'>" +
+                            indexDocument.searchboosttext +
+                            "</div></document>"
+                        )
+                        : fullContent.lastIndexOf("</html>") !== -1
+                            ? fullContent.trim().replace(
+                                "</html>",
+                                "<div id='htmmetadata' style='display:none;'>" +
+                                indexDocument.searchboosttext +
+                                "</div></html>"
+                            )
+                            : fullContent.trim() +
+                            "<div id='nodata' style='display:none;'>" +
+                            indexDocument.searchboosttext +
+                            "</div>";
+
+                    indexDocument.Suggest = objSuggest;
+                    indexDocument.created_date = new Date(
+                        !!dr["created_date"]
+                            ? dr["created_date"]
+                                .toString()
+                                .substring(0, 4) +
+                            "-" +
+                            dr["created_date"].toString().substring(4, 2) +
+                            "-" +
+                            dr["created_date"].toString().substring(6, 2) +
+                            " " +
+                            dr["created_date"].toString().substring(8, 2) +
+                            ":" +
+                            dr["created_date"].toString().substring(10, 2) +
+                            ":" +
+                            dr["created_date"].toString().substring(12, 2)
+                            : "1900-01-01"
+                    );
+                    const formatteddate =
+                        !!indexDocument.documentdate
+                            ? indexDocument.documentdate.substring(0, 4) +
+                            "-" +
+                            indexDocument.documentdate.substring(4, 2) +
+                            "-" +
+                            indexDocument.documentdate.substring(6, 2)
+                            : "1900-01-01";
+                    indexDocument.updated_date = new Date(
+                        !!dr["UpdatedDate"]
+                            ? dr["UpdatedDate"]
+                                .toString()
+                                .substring(0, 4) +
+                            "-" +
+                            dr["UpdatedDate"].toString().substring(4, 2) +
+                            "-" +
+                            dr["UpdatedDate"].toString().substring(6, 2) +
+                            " " +
+                            dr["UpdatedDate"].toString().substring(8, 2) +
+                            ":" +
+                            dr["UpdatedDate"].toString().substring(10, 2) +
+                            ":" +
+                            dr["UpdatedDate"].toString().substring(12, 2)
+                            : "1900-01-01"
+                    );
+
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date(new Date().toISOString().slice(0, 10));
+                    indexDocument.lastQCDate = new Date(new Date().toISOString().slice(0, 10));
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+
+                    const filteredCategory: Category[] = indexDocument.categories.filter(
+                        (objCategory: Category) =>
+                            objCategory.id === "111050000000018392" ||
+                            objCategory.id === "111050000000018393" ||
+                            objCategory.id === "111050000000018400"
+                    );
+                    filteredCategory.forEach((objCategory: Category) => {
+                        objCategory.name = objCategory?.name?.replace(
+                            /centax /gi,
+                            ""
+                        );
+                        objCategory.name = objCategory?.name?.replace("Centax ", "");
+                    });
+                    indexDocument.categories = filteredCategory;
+
+                    indexDocumentList.push(indexDocument);
+
+
+                }
+                catch (ex) {
+                    console.error("error: " + dr["mid"] + ex.message);
+                    Common.LogErrorId(dr["mid"].toString());
                 }
             }
-
-            // The rest of your code for processing dataRows and adding to indexDocumentList will go here
+            console.log("Document Batch No completed: " + i + "\r\n");
+            let status = "";
+            // if (indexType === 1) {
+            //     status = await bulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            //   } else if (indexType === 2) {
+            //     status = await bulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            //   } else if (indexType === 3) {
+            //     status = await bulkIndexingAnalyserTesting(indexDocumentList, "x", IndexLocalPath, IndexNameTest, IndexDocument, docType);
+            //   } else {
+            //     status = await saveJson(indexDocumentList);
+            //   }
+            //GC.Collect();
         }
-    }
 
-    // Return the final result (you can adjust the return value based on the actual requirements)
+        // The rest of your code for processing dataRows and adding to indexDocumentList will go here
+    }
     return reccount;
 }
