@@ -236,6 +236,73 @@ export class Common {
         }
     }
 
+    public static LogError(ex: Error, msg: string = ""): void {
+        try {
+            let message = `Time: ${new Date().toLocaleString()}\n`;
+            message += "-----------------------------------------------------------\n";
+            message += `Message: ${ex.message}\n`;
+            message += `StackTrace: ${ex.stack}\n`;
+            message += `Source: ${ex.name}\n`;
+
+            //   if (ex.innerException != null) {
+            //     message += `Inner Exception: ${ex.innerException.message}\n`;
+            //   }
+
+            message += `TargetSite: ${ex.toString()}\n`;
+            message += "-----------------------------------------------------------\n";
+
+            if (msg) {
+                message += msg;
+                message += "-----------------------------------------------------------\n";
+            }
+
+            console.error(message); // Using console.error to differentiate from regular console.log
+
+        } catch (error) {
+            // Do nothing or handle the error in a way that suits your application
+        }
+    }
+    public static writeLog(strLogText: string): void {
+        const logPath: string = process.env.logPath || 'D:\\ResearchIndexLog'; // Or use your predefined configuration
+
+        const currentDate = new Date();
+        const filePath = path.join(
+            logPath,
+            `apiLog${currentDate.getFullYear()}${currentDate.getMonth() + 1}${currentDate.getDate()}.txt`
+        );
+
+        if (!fs.existsSync(logPath)) {
+            fs.mkdirSync(logPath, { recursive: true });
+        }
+
+        const log = fs.createWriteStream(filePath, { flags: 'a' }); // 'a' flag for append mode
+        log.write(`${currentDate}\n`);
+        log.write(`${strLogText}\n\n`);
+        log.end();
+    }
+
+    public static UploadPdfFilesOnAmazonS3Bucket(id: string, srcPath: string) { }
+    public static UploadImageOnAmazonS3BucketCentax(id: string, srcPath: string) { }
+    public static UploadLinkFilesOnS3Centax(cmsid: string, group: string, documentformat: string, filenamepath: string, webid: string) { }
+
+    public static htmlFileManagement(MID: string, FilePath: string, Type: string): string {
+        if (FilePath.toLowerCase().indexOf(".htm") !== -1) {
+            MID = MID + ".htm";
+            const ROOTPath: string = "<Your_ROOTPath>"; // Replace with the actual ROOTPath value
+            const NEWPath: string = "<Your_NEWPath>"; // Replace with the actual NEWPath value
+
+            if (!fs.existsSync(NEWPath)) {
+                fs.mkdirSync(NEWPath, { recursive: true });
+            }
+
+            if (fs.existsSync(ROOTPath + FilePath)) {
+                fs.copyFileSync(ROOTPath + FilePath, NEWPath + MID);
+            }
+        } else {
+            MID = FilePath;
+        }
+        return MID;
+    }
 
 }
 
