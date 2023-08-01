@@ -16,7 +16,7 @@ export interface Subgroup {
     id?: string;
     name?: string;
     url?: string;
-    subsubgroup?: Subsubgroup;
+    subsubgroup?: Subsubgroup | null;
 }
 
 export interface Subsubgroup {

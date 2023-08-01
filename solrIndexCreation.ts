@@ -4674,6 +4674,591 @@ async function CirNotIndex(dt: any, docType: number, templateid: string): Promis
     return reccount;
 }
 
+async function ArticleIndex(dt: any, docType: number, templateid: string): Promise<void> {
+    const indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 100; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+    console.log("Total Document Batch Started:", totalBatches);
+
+    for (let i = 0; i < totalBatches; i++) {
+        indexDocumentList.length = 0;
+        console.log("Document Batch No started:", i);
+
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, (i + 1) * batchSize);
+        if (dataRows.length > 0) {
+            for (const dr of dataRows) {
+                try {
+                    const objSuggest: CompletionField[] = [];
+                    const indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = dr["mid"].toString().trim();
+                    indexDocument.mid = dr["id"].toString().trim();
+                    indexDocument.excusdocid = dr["excusdocid"].toString().trim();
+                    indexDocument.templateid = templateid;
+                    indexDocument.documenttype = dr["documenttype"].toString().toLowerCase().trim();
+                    indexDocument.documentformat = dr["documentformat"].toString().toLowerCase().trim();
+                    indexDocument.documenttypeboost = 1000;
+                    indexDocument.filenamepath = dr["url"].toString().trim();
+                    if (dr["url"].toString().toLowerCase().indexOf(".pdf") !== -1) {
+                        indexDocument.filenamepath = new Common.UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    }
+                    // Common.UploadLinkFilesOnS3(indexDocument.id, "article");
+                    Common.UploadLinkFilesOnS3Centax(indexDocument.mid, "article", indexDocument.documentformat, dr["url"].toString().trim(), indexDocument.id);
+                    // indexDocument.filenamepath = new Common().pdfFileManagement(indexDocument.id, indexDocument.filenamepath, "");
+                    // Common.CopyLinkFiles(indexDocument.mid, indexDocument.id, "article");
+                    try {
+                        // Common.UploadImageOnAmazonS3Bucket(indexDocument.id, System.Configuration.ConfigurationManager.AppSettings["imagePath"]);
+                        Common.UploadImageOnAmazonS3BucketCentax(indexDocument.id, indexDocument.mid);
+                    } catch (ex) {
+                        Common.LogError(ex, "mid = " + dr["mid"] + "s3 upload error");
+                    }
+                    // indexDocument.categories.push({ id: "111050000000000002", name: "Direct Tax Laws", subcategory: { id: "111050000000009187", name: "Direct Tax Laws" } });
+                    // indexDocument.groups = new Groups() { group: new Group() { id = "", name = "", subgroup: new Subgroup() { id = "", name = "", subsubgroup: new Subsubgroup() { id = "", name = "", subsubsubgroup: new Subsubsubgroup() { id = "", name = "", subsubsubsubgroup: new Subsubsubsubgroup() { id = "", name = "" } } } } } };
+                    const year: string = dr["year"].toString().trim();
+                    if (!!year && year !== "0000") {
+                        indexDocument.year = { id: year.trim(), name: year.trim() };
+                    }
+                    const objMasters: Masterinfo = {} as Masterinfo;
+                    const objMasterInfo: Info = {} as Info;
+                    const objAssociates: Associates = {} as Associates;
+
+                    // #region subject master
+                    const caseSubjectArray = dr?.ExpertSubject?.split('$') ?? null;
+                    const objsubjects: GenericInfo[] = [];
+
+                    if (caseSubjectArray != null && caseSubjectArray.length > 1) {
+                        for (const association of caseSubjectArray) {
+                            const associations = association.split('|');
+
+                            if (associations != null && associations.length > 1) {
+                                const objSubject: GenericInfo = {} as GenericInfo;
+
+                                const type = associations[0] !== "" ? associations[1]?.split('^')[0]?.toLowerCase() : "";
+                                if (type === "subject") {
+                                    if (!!associations[0]) {
+                                        // const categories = Common.CasePopularActs()[associations[0]?.trim()]?.[1]?.split(',') ?? [];
+                                        objSubject.id = associations[0]?.trim();
+                                        objSubject.type = type;
+                                        objSubject.name = associations[1] !== "" ? associations[1]?.split('^')[1]?.split('~')[0] : "";
+                                        objSubject.shortName = "";
+                                        objSubject.ordering = associations[1]?.split('^')[1]?.split('~')[1];
+                                        objSubject.orderInteger = 0;
+                                        objSubject.url = Common.GetUrl(objSubject.name?.toLowerCase() || "");
+                                        // objSubject.catUrls = categories;
+                                        objsubjects.push(objSubject);
+                                        if (!!objSubject.name?.trim()) {
+                                            objSuggest.push({
+                                                Input: [objSubject.name.toLowerCase().trim()],
+                                                Weight: 18
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // #endregion
+                    // #region act associations 
+                    const associationArray = dr?.actassociations?.split('$') ?? null;
+                    if (associationArray != null && associationArray.length > 1) {
+                        const objActs: GenericInfo[] = [];
+                        const objSections: GenericInfo[] = [];
+                        const objActAssociations: Associate[] = [];
+                        const objSectionAssociations: Associate[] = [];
+
+                        for (const association of associationArray) {
+                            const associations = association.split('|');
+
+                            if (associations != null && associations.length > 1) {
+                                const objAct: GenericInfo = {} as GenericInfo;
+                                const objSection: GenericInfo = {} as GenericInfo;
+                                const objActAssociate: Associate = {} as Associate;
+                                const objSectionAssociate: Associate = {} as Associate;
+                                const actidsecid = associations[0]?.indexOf('#') !== -1 ? associations[0]?.trim()?.split('#') : null;
+                                const type = associations[0] !== "" ? associations[1]?.split('^')[0]?.toLowerCase() : "";
+                                if (type === "act") {
+                                    if (!!associations[0]) {
+                                        if (Common.ArticlePopularActs().hasOwnProperty(associations[0]?.trim())) {
+                                            const categories = Common.ArticlePopularActs()[associations[0]?.trim()]?.[1]?.split(',') ?? [];
+                                            objAct.id = objActAssociate.id = associations[0]?.trim();
+                                            objAct.type = objActAssociate.type = type;
+                                            objAct.name = objActAssociate.name = associations[1] !== "" ? associations[1]?.split('^')[1]?.split('~')[0] : "";
+                                            objAct.shortName = "";
+                                            objAct.ordering = associations[1]?.split('^')[1]?.split('~')[1];
+                                            objAct.orderInteger = 0;
+                                            objActAssociate.associatedDocid = "";
+                                            objAct.url = objActAssociate.url = Common.GetUrl(objActAssociate.name?.toLowerCase() || "");
+                                            objAct.catUrls = categories;
+                                        } else {
+                                            const categories = Common.ArticleOtherActs()["999999999999999999"]?.[1]?.split(',') ?? [];
+                                            objAct.id = "999999999999999999";
+                                            objAct.type = type;
+                                            objAct.name = "Other Acts";
+                                            objAct.shortName = "";
+                                            objAct.ordering = "999999999";
+                                            objAct.orderInteger = 0;
+                                            objAct.url = Common.GetUrl(objAct.name?.toLowerCase() || "");
+                                            objAct.catUrls = categories;
+                                            objActAssociate.id = associations[0]?.trim();
+                                            objActAssociate.type = type;
+                                            objActAssociate.name = associations[1] !== "" ? associations[1]?.split('^')[1]?.split('~')[0] : "";
+                                            objActAssociate.ordering = associations[1]?.split('^')[1]?.split('~')[1];
+                                            objActAssociate.associatedDocid = "";
+                                            objActAssociate.url = Common.GetUrl(objActAssociate.name?.toLowerCase() || "");
+                                        }
+                                        // if (!!objAct.name?.trim()) {
+                                        //     objSuggest.push(objAct.name.trim());
+                                        // }
+                                        objActs.push(objAct);
+                                        objActAssociations.push(objActAssociate);
+                                    }
+                                } else {
+                                    const section = associations[1] !== "" ? associations[1]?.split('^')[1] : "";
+                                    let sectionName = section?.indexOf('~') !== -1 ? section?.split('~')[0]?.trim() : section?.trim();
+                                    if (!!sectionName) {
+                                        const objSByte = parseInt(section?.substring(0, 1) || "");
+                                        if (!isNaN(objSByte)) {
+                                            sectionName = "Section - " + sectionName;
+                                        }
+                                        const parentsectioininfo = dr?.parentsectioninfo?.split('$') ?? null;
+                                        let isparentsection = false;
+                                        if (parentsectioininfo != null) {
+                                            for (const parentsection of parentsectioininfo) {
+                                                if (parentsection.indexOf(actidsecid?.[1]?.trim() || "") !== -1) {
+                                                    const parentsectionidname = parentsection.substring(parentsection.indexOf('#')).split('|');
+                                                    objSectionAssociate.id = parentsectionidname[0].replace('#', ' ').trim();
+                                                    objSectionAssociate.name = parentsectionidname[1].replace('^', '-').split('~')[0];
+                                                    objSectionAssociate.ordering = parentsectionidname[1].replace('^', '-').split('~')[1];
+                                                    objSectionAssociate.actsectionid = (actidsecid?.[0]?.trim() || "") + parentsectionidname[0].replace('#', ' ').trim();
+                                                    isparentsection = true;
+                                                }
+                                            }
+                                        }
+                                        if (Common.ArticlePopularActs().hasOwnProperty(actidsecid?.[0]?.trim() || "")) {
+                                            objSection.id = actidsecid?.[1] || "";
+                                            objSection.pid = actidsecid?.[0] || "";
+                                            objSection.type = type;
+                                            objSection.name = sectionName;
+                                            objSection.shortName = "";
+                                            objSection.ordering = section?.indexOf('~') !== -1 ? section?.split('~')[1] : "";
+                                            objSection.orderInteger = 0;
+                                            objSection.url = Common.GetUrl(objSection.name?.toLowerCase() || "");
+
+                                            if (!isparentsection) {
+                                                objSectionAssociate.id = actidsecid?.[1] || "";
+                                                objSectionAssociate.name = sectionName;
+                                                objSectionAssociate.ordering = section?.indexOf('~') !== -1 ? section?.split('~')[1] : "";
+                                                objSectionAssociate.actsectionid = (actidsecid?.[0]?.trim() || "") + (actidsecid?.[1]?.trim() || "");
+                                            }
+                                            objSectionAssociate.type = type;
+                                            objSectionAssociate.associatedDocid = actidsecid?.[0]?.trim() || "";
+                                            objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name?.toLowerCase() || "");
+
+                                        } else {
+                                            if (!!sectionName) {
+                                                if (!isparentsection) {
+                                                    objSectionAssociate.id = actidsecid?.[1] || "";
+                                                    objSectionAssociate.name = sectionName;
+                                                    objSectionAssociate.ordering = section?.indexOf('~') !== -1 ? section?.split('~')[1] : "";
+                                                    objSectionAssociate.actsectionid = (actidsecid?.[0]?.trim() || "") + (actidsecid?.[1]?.trim() || "");
+                                                }
+                                                objSectionAssociate.type = type;
+                                                objSectionAssociate.associatedDocid = actidsecid?.[0]?.trim() || "";
+                                                objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name?.toLowerCase() || "");
+                                            }
+                                        }
+
+                                        // if (!!objSection.name?.trim()) {
+                                        //     objSuggest.push(objSection.name.trim());
+                                        // }
+
+                                        objSections.push(objSection);
+                                        objSectionAssociations.push(objSectionAssociate);
+                                    }
+                                }
+                            }
+
+                        }
+                        objAssociates.act = objActAssociations;
+                        objAssociates.section = objSectionAssociations;
+                        objMasterInfo.act = objActs;
+                        objMasterInfo.section = objSections;
+                        objMasterInfo.subject = objsubjects;
+                        objMasters.info = objMasterInfo;
+
+                    }
+                    // else {
+                    //     indexDocument.associates = [{ id: "", type: "", name: "", url: "", associatedDocid: "" }];
+                    // }
+                    // #endregion
+                    // #region article subject binding
+                    const associates = !!dr["articlesubjectinfo"]
+                        ? dr["articlesubjectinfo"].toString().split('^')
+                        : null;
+
+                    const objSubjectAssociations: Associate[] = [];
+                    if (associates != null) {
+                        const objSubjectAssociate: Associate = {} as Associate;
+                        objSubjectAssociate.id = associates[0].trim();
+                        objSubjectAssociate.name = associates[1].trim();
+                        objSubjectAssociate.type = "subject";
+                        objSubjectAssociate.url = Common.GetUrl(objSubjectAssociate.name);
+                        objSubjectAssociate.associatedDocid = "";
+                        objSubjectAssociations.push(objSubjectAssociate);
+                    }
+                    objAssociates.subject = objSubjectAssociations;
+                    // #endregion article subject binding end
+
+                    // #region rule associations
+                    const ruleAssociationArray = !!dr["DDA_Rules"]
+                        ? dr["DDA_Rules"].toString().split('$')
+                        : null;
+
+                    if (ruleAssociationArray != null && ruleAssociationArray.length > 1) {
+                        const objRuleAssociations: Associate[] = [];
+                        const objRuleNoAssociations: Associate[] = [];
+
+                        for (const association of ruleAssociationArray) {
+                            const associations = association.split('|');
+
+                            if (!!association && association.length > 5) {
+                                const objRuleAssociate: Associate = {} as Associate;
+                                const objRulenoAssociate: Associate = {} as Associate;
+
+                                const ruleidrulenoid = associations[0].toString().indexOf('#') !== -1 ? associations[0].toString().trim().split('#') : null;
+                                const type = associations[0] !== "" ? associations[1].split('^')[0].toLowerCase() : "";
+                                if (type.toLowerCase().trim() === "rule") {
+                                    if (!!associations[0]) {
+                                        objRuleAssociate.id = associations[0].trim();
+                                        objRuleAssociate.type = type;
+                                        objRuleAssociate.name = associations[1] !== "" ? associations[1].split('^')[1] : "";
+                                        objRuleAssociate.associatedDocid = "";
+                                        objRuleAssociate.url = Common.GetUrl(objRuleAssociate.name.toLowerCase());
+                                        objRuleAssociations.push(objRuleAssociate);
+                                    }
+                                } else {
+                                    const objSByte = parseInt(associations[1] !== "" ? associations[1].split('^')[1] : "");
+                                    let ruleno = associations[1] !== "" ? associations[1].split('^')[1] : "";
+                                    if (!isNaN(objSByte)) {
+                                        ruleno = "Rule - " + ruleno;
+                                    }
+                                    if (!!ruleidrulenoid?.[1]) {
+                                        objRulenoAssociate.id = ruleidrulenoid[1];
+                                        objRulenoAssociate.type = type;
+                                        objRulenoAssociate.name = ruleno;
+                                        objRulenoAssociate.associatedDocid = ruleidrulenoid[0];
+                                        objRulenoAssociate.url = Common.GetUrl(objRulenoAssociate.name.toLowerCase());
+                                        objRuleNoAssociations.push(objRulenoAssociate);
+                                    }
+                                }
+                            }
+                        }
+                        objAssociates.rule = objRuleAssociations;
+                        objAssociates.ruleno = objRuleNoAssociations;
+                    }
+                    // #endregion
+
+                    // #region case referred associations
+                    const casereferredAssociation = !!dr["DDA_Caselaw"]
+                        ? dr["DDA_Caselaw"].toString().split('$')
+                        : null;
+
+                    if (casereferredAssociation != null) {
+                        const objCaseReferredAssociations: Associate[] = [];
+
+                        for (const association of casereferredAssociation) {
+                            const associations = association.split('^');
+
+                            if (!!association && association.length > 5) {
+                                const objCaseRefAssociate: Associate = {} as Associate;
+
+                                const idtype = associations[0].toString().indexOf('|') !== -1 ? associations[0].toString().trim().split('|') : null;
+                                const namedate = associations[1].toString().indexOf('#') !== -1 ? associations[1].split('#') : null;
+
+                                if (!!idtype?.[1]) {
+                                    objCaseRefAssociate.id = idtype[0];
+                                    objCaseRefAssociate.type = idtype[1];
+                                    objCaseRefAssociate.name = namedate?.[0] !== "" ? namedate[0] : "";
+                                    objCaseRefAssociate.date = namedate?.[1]?.indexOf('@') !== -1 ? namedate[1].split('@')[0] : "";
+                                    objCaseRefAssociate.subheading = namedate?.[1]?.indexOf('@') !== -1 ? namedate[1].split('@')[1] : "";
+                                    objCaseRefAssociate.associatedDocid = indexDocument.mid;
+                                    objCaseRefAssociate.url = Common.GetUrl(objCaseRefAssociate.name.toLowerCase());
+                                    objCaseReferredAssociations.push(objCaseRefAssociate);
+                                }
+                            }
+                        }
+                        objAssociates.casereferred = objCaseReferredAssociations;
+                    }
+
+                    indexDocument.associates = objAssociates;
+                    // #endregion
+
+                    // #region cat subcat binding
+                    const catSubCatArray = !!dr["categoriescentax"]
+                        ? dr["categoriescentax"].toString().split('$')
+                        : null;
+
+                    if (catSubCatArray != null) {
+                        const objCatList: Category[] = [];
+                        for (const catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                const isprimarycat = catsubcat.split('%').length > 1 ? parseInt(catsubcat.split('%')[1]) : 0;
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname = !!catsubcat ? catsubcat.split('|') : null;
+                                    const mainCat = catidname[1].trim().split('^')[0].trim();
+                                    const isRequiredCategory =
+                                        mainCat.includes("111050000000018392") ||
+                                        mainCat.includes("111050000000018393") ||
+                                        mainCat.includes("111050000000018400") ||
+                                        mainCat.includes("111050000000018768") ||
+                                        mainCat.includes("111050000000018769") ||
+                                        mainCat.includes("111050000000018770") ||
+                                        mainCat.includes("111050000000018771") ||
+                                        mainCat.includes("111050000000018772") ||
+                                        mainCat.includes("111050000000019031");
+
+                                    if (!isRequiredCategory) continue;
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname[0].trim().split('^')[0].trim();
+                                            objCat.name = catidname[0].split('^')[1].trim().split('%')[0];
+                                            if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objSubCat.id = catidname[2].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[2].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        default:
+                                            objSubCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                    }
+
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0].trim();
+                                    objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                    if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+
+                                objCatList.push(objCat);
+                            }
+                        }
+                        indexDocument.categories = objCatList;
+                    }
+                    // #endregion
+
+                    // #region group binding
+                    const groupsArray = dr?.groups?.split('^').map(g => g.trim()) || null;
+                    if (groupsArray) {
+                        const objGroups: Groups = {
+                            group: {
+                                id: groupsArray[0]?.split('^')[0]?.trim() || '',
+                                name: groupsArray[1]?.trim() || '',
+                                url: Common.GetUrl(groupsArray[1]?.toLowerCase()?.trim()) || '',
+                                subgroup: {
+                                    id: '',
+                                    name: '',
+                                    subsubgroup: null,
+                                    url: ''
+                                }
+                            }
+                        };
+                        indexDocument.groups = objGroups;
+                    }
+                    // #endregion end of group binding
+
+                    indexDocument.documentdate = dr?.documentdate?.split('^')[0] || '';
+                    indexDocument.formatteddocumentdate = new Date(!!indexDocument.documentdate
+                        ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 6)}-${indexDocument.documentdate.substring(6, 8)}`
+                        : '1900-01-01'
+                    );
+                    indexDocument.displaydocumentdatestring = !!indexDocument.documentdate && indexDocument.documentdate.trim() !== '19000101' ? indexDocument.documentdate : '';
+
+                    indexDocument.heading = dr?.heading?.trim() || '';
+                    indexDocument.subheading = dr?.subheading?.trim() || '';
+                    indexDocument.sortheading = dr?.sortheading?.toLowerCase()?.trim() || '';
+                    indexDocument.sortbycourt = '';
+                    indexDocument.sortbyname = '';
+                    indexDocument.sortbyauthor = dr?.sortbyauthor?.toLowerCase()?.trim() || '';
+                    indexDocument.sortheadingnumber = dr?.sortheadingnumber?.toLowerCase()?.trim() || '';
+                    indexDocument.searchheadingnumber = '';
+                    indexDocument.parentheadings = [{ id: '', name: '', ordering: '' }];
+                    indexDocument.shortcontent = dr?.shortcontent?.trim() || '';
+
+                    indexDocument.url = dr?.url?.toLowerCase()?.trim() || '';
+                    indexDocument.language = ''; // dr?.language?.toLowerCase()?.trim() || '';
+
+                    // #region Master Info
+                    const objClassifications: GenericInfo[] = [];
+                    const objSubClassifications: GenericInfo[] = [];
+
+                    const subjects = dr?.GSTSubjectID?.split('$') || null;
+                    if (subjects) {
+                        for (const subject of subjects) {
+                            if (!!subject) {
+                                const objSubjectInfo: GenericInfo = {
+                                    id: subject.split('|')[0]?.trim() || '',
+                                    name: subject.split('|')[1]?.trim() || '',
+                                    shortName: subject.split('|')[1]?.trim() || '',
+                                    ordering: '',
+                                    type: 'classification',
+                                    url: Common.GetUrl(subject.split('|')[1]?.trim()?.toLowerCase()) || '',
+                                } as GenericInfo;
+                                objClassifications.push(objSubjectInfo);
+                            }
+                        }
+                    }
+
+                    const asindases = dr?.AAAAssociation?.split('$') || null;
+                    if (asindases) {
+                        const objstandardsinfoes: GenericInfo[] = [];
+                        const objsubstandardsinfoes: GenericInfo[] = [];
+                        for (const asindas of asindases) {
+                            if (!!asindas) {
+                                const asindasinfo = asindas.split('@');
+                                const groupinfo = asindasinfo[1].split('~');
+                                const standardInfo = asindasinfo[0].split('|');
+
+                                if (!!asindasinfo[0].split('|')[0]) {
+                                    const objstandardinfo: GenericInfo = {
+                                        id: groupinfo[0]?.trim() || '',
+                                        type: 'standards',
+                                        name: groupinfo[1].split('#')[0]?.trim() || '',
+                                        shortName: groupinfo[1].split('#')[0]?.trim() || '',
+                                        ordering: groupinfo[1].split('#')[0]?.toLowerCase() || '',
+                                        url: Common.GetUrl(groupinfo[1].split('#')[0]?.trim()?.toLowerCase()) || '',
+                                    } as GenericInfo;
+                                    objstandardsinfoes.push(objstandardinfo);
+
+                                    const objsubstandardinfo: GenericInfo = {
+                                        id: standardInfo[0]?.trim() || '',
+                                        pid: groupinfo[0]?.trim() || '',
+                                        type: 'substandards',
+                                        name: standardInfo[1]?.trim()?.replace('^', '-') || '',
+                                        shortName: standardInfo[1]?.trim()?.replace('^', '-') || '',
+                                        ordering: groupinfo[1]?.split('#')[1]?.split(':')[0] || '0',
+                                        orderInteger: groupinfo[1]?.split('#')[1] ? parseInt(groupinfo[1]?.split('#')[1].split(':')[0]) : 0,
+                                        year: groupinfo[1]?.split('#')[1]?.split(':')[1] || '',
+                                        url: Common.GetUrl(standardInfo[1]?.trim()?.toLowerCase()?.replace('^', '-')) || '',
+                                    } as GenericInfo;
+                                    objsubstandardsinfoes.push(objsubstandardinfo);
+                                }
+                            }
+                        }
+                        objMasterInfo.standards = objstandardsinfoes;
+                        objMasterInfo.substandards = objsubstandardsinfoes;
+                    }
+
+                    const objAuthors: GenericInfo[] = [];
+                    const authornames: string[] = [];
+                    const authors = dr?.AuthorName?.split('$') || null;
+                    if (authors) {
+                        for (const author of authors) {
+                            if (!!author) {
+                                const authorDetails = author.split('~');
+                                const objAuthor: GenericInfo = {
+                                    id: authorDetails[0]?.split('@')[0]?.trim() || '',
+                                    name: authorDetails[0]?.split('@')[1] || '',
+                                    shortName: '',
+                                    type: 'author',
+                                    designation: authorDetails[1]?.split('^')[0]?.trim() || '',
+                                    socialSiteUrl: authorDetails[1]?.split('^')[1]?.split('#')[0]?.trim() || '',
+                                    imagePath: authorDetails[1]?.split('^')[1]?.split('#')[1]?.trim().split('!')[0] || '',
+                                    orderInteger: authorDetails[1]?.split('^')[1]?.split('#')[1]?.trim().split('!').length > 1
+                                        ? parseInt(authorDetails[1]?.split('^')[1]?.split('#')[1]?.trim().split('!')[1])
+                                        : 0,
+                                } as GenericInfo;
+                                if (!!objAuthor.imagePath) {
+                                    Common.UploadAuthorsImageOnAmazonS3Bucket(indexDocument.id, objAuthor.imagePath);
+                                }
+                                objAuthors.push(objAuthor);
+                                if (!!objAuthor.name.trim()) {
+                                    authornames.push(objAuthor.name.trim());
+                                }
+                            }
+                        }
+                    }
+
+                    objMasterInfo.authors = objAuthors;
+                    objMasterInfo.classification = objClassifications;
+                    objMasterInfo.subclassification = objSubClassifications;
+                    objMasters.info = objMasterInfo;
+                    // indexDocument.masterinfo = objMasters;
+                    // #endregion
+
+
+
+                    //start from citation
+
+
+                    // ... (the rest of the code)
+                } catch (ex) {
+                    Common.LogError(ex, "mid = " + dr["mid"]);
+                    console.log("error:", dr["mid"], ex.message);
+                    Common.LogErrorId(dr["mid"].toString());
+                }
+            }
+        }
+    }
+}
 
 
 // }

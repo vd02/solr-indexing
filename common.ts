@@ -390,17 +390,48 @@ export class Common {
 
     public static CirnotOtherActs(): { [key: string]: string[] } {
         const acts: { [key: string]: string[] } = {};
-    
+
         acts["999999999999999999"] = ["otheract", "direct-tax-laws,company-and-sebi,fema-banking-insurance,international-tax,transfer-pricing"];
-    
+
         return acts;
     }
-    
 
-   public static customTrimStart(input: string, chars?: string): string {
+
+    public static customTrimStart(input: string, chars?: string): string {
         const charRegExp = chars ? new RegExp(`^[${chars}]+`) : /^\s+/;
         return input.replace(charRegExp, '');
-      }
+    }
+
+    public static ArticlePopularActs(): { [key: string]: string[] } {
+        const acts: { [key: string]: string[] } = {};
+
+        acts["102010000000000337"] = ["Income-tax Act, 1961", "direct-tax-laws,international-tax,transfer-pricing"];
+        acts["102010000000000344"] = ["Income-Tax Rules, 1962", "direct-tax-laws"];
+        acts["102010000000000672"] = ["Wealth-Tax Act, 1957", "direct-tax-laws"];
+        acts["102010000000000045"] = ["Prohibition of Benami Property Transactions Act, 1988", "direct-tax-laws"];
+        ///////////////////////////////////////////
+        acts["102010000000005574"] = ["Central Goods And Services Tax Act, 2017", "gst-new"];
+        acts["102010000000005575"] = ["Goods And Services Tax (Compensation To States) Act, 2017", "gst-new"];
+        acts["102010000000005576"] = ["Integrated Goods And Services Tax Act, 2017", "gst-new"];
+        acts["102010000000005655"] = ["Punjab Goods And Services Tax Act, 2017", "gst-new"];
+
+        return acts;
+    }
+
+    public static ArticleOtherActs(): { [key: string]: string[] } {
+        const acts: { [key: string]: string[] } = {};
+
+        acts["999999999999999999"] = ["otheract", "direct-tax-laws,international-tax,transfer-pricing"];
+
+        return acts;
+    }
+
+    public static UploadAuthorsImageOnAmazonS3Bucket(destid: string, imgsrcPath: string): void {
+        const fileName: string = path.basename(imgsrcPath);
+        // const objupload: AmazonS3Uploader = new AmazonS3Uploader();
+        // objupload.UploadImage(`${ConfigurationSettings.AppSettings.s3imageBucket}${destid}`, fileName, imgsrcPath);
+    }
+
 
 }
 
