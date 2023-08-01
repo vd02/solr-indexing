@@ -281,9 +281,9 @@ export class Common {
         log.end();
     }
 
-    public static UploadPdfFilesOnAmazonS3Bucket(id: string, srcPath: string) { }
-    public static UploadImageOnAmazonS3BucketCentax(id: string, srcPath: string) { }
-    public static UploadLinkFilesOnS3Centax(cmsid: string, group: string, documentformat: string, filenamepath: string, webid: string) { }
+    public static UploadPdfFilesOnAmazonS3Bucket(id: string, srcPath: string | undefined) { }
+    public static UploadImageOnAmazonS3BucketCentax(id: string, srcPath: string | undefined) { }
+    public static UploadLinkFilesOnS3Centax(cmsid: string | undefined, group: string | undefined, documentformat: string | undefined, filenamepath: string | undefined, webid: string) { }
 
     public static htmlFileManagement(MID: string, FilePath: string, Type: string): string {
         if (FilePath.toLowerCase().indexOf(".htm") !== -1) {
@@ -303,6 +303,104 @@ export class Common {
         }
         return MID;
     }
+
+    public static pdfFileManagement(MID: string | undefined, FilePath: string, Type: string): string {
+        if (FilePath.toLowerCase().indexOf(".pdf") !== -1) {
+            if (!Type || Type.toLowerCase() === "instruction")
+                MID = MID + "_instruction.pdf";
+            else
+                MID = MID + ".pdf";
+
+            let ROOTPath = System.Configuration.ConfigurationManager.AppSettings["FilePath"];
+            let NEWPath = System.Configuration.ConfigurationManager.AppSettings["PdfPath"];
+
+            if (!fs.existsSync(NEWPath))
+                fs.mkdirSync(NEWPath);
+
+            if (fs.existsSync(ROOTPath + FilePath))
+                fs.copyFileSync(ROOTPath + FilePath, NEWPath + MID);
+        }
+        else
+            MID = FilePath;
+
+        return MID;
+    }
+
+    public static CirnotPopularActs(): Map<string, string[]> {
+        const acts: Map<string, string[]> = new Map();
+        acts.set("102010000000000337", ["Income-tax Act, 1961", "direct-tax-laws,international-tax,transfer-pricing"]);
+        acts.set("102010000000005215", ["Black Money (Undisclosed Foreign Income and Assets) and Imposition of Tax Act, 2015", "direct-tax-laws,international-tax,transfer-pricing"]);
+        acts.set("102010000000000104", ["Commodities Transaction Tax", "direct-tax-laws,international-tax,transfer-pricing"]);
+        acts.set("102010000000000045", ["Prohibition of Benami Property Transactions Act, 1988", "direct-tax-laws,international-tax,transfer-pricing"]);
+
+        acts.set("102010000000005719", ["Fugitive Economic Offenders Act, 2018", "direct-tax-laws,international-tax,transfer-pricing"]);
+        acts.set("102010000000005397", ["Income Declaration Scheme, 2016", "international-tax,transfer-pricing"]);
+        acts.set("102010000000000574", ["Securities Transaction Tax", "international-tax,transfer-pricing"]);
+
+        acts.set("102010000000000793", ["Companies Act, 2013", "company-and-sebi"]);
+        acts.set("102010000000000112", ["Companies Act, 1956", "company-and-sebi"]);
+        acts.set("102010000000000569", ["SEBI Act, 1992", "company-and-sebi"]);
+        acts.set("102010000000000571", ["Securities Contracts (Regulation) Act, 1956", "company-and-sebi"]);
+
+        acts.set("102010000000000039", ["Banking Regulation Act, 1949", "fema-banking-insurance"]);
+        acts.set("102010000000000526", ["Reserve Bank Of India Act, 1934", "fema-banking-insurance"]);
+        acts.set("102010000000000279", ["Foreign Contribution (Regulation) Act", "fema-banking-insurance"]);
+        acts.set("102010000000000280", ["FDI", "fema-banking-insurance"]);
+        acts.set("102010000000000284", ["FEMA", "fema-banking-insurance"]);
+        acts.set("102010000000000287", ["Foreign Trade (Development And Regulation) Act", "fema-banking-insurance"]);
+        acts.set("102010000000000381", ["IRDA", "fema-banking-insurance"]);
+        acts.set("102010000000005536", ["NBFCs", "fema-banking-insurance"]);
+        acts.set("102010000000000516", ["Recovery Of Debts And Bankruptcy Act, 1993", "fema-banking-insurance"]);
+        acts.set("102010000000000576", ["Securitisation And Reconstruction Of Financial Assets And Enforcement Of Security Interest Act, 2002", "fema-banking-insurance"]);
+
+        acts.set("102010000000005389", ["Insolvency and Bankruptcy Code, 2016", "ibc"]);
+
+        acts.set("102010000000000124", ["Competition Act, 2002", "competition-law"]);
+
+        acts.set("102010000000005652", ["Andhra Pradesh Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005640", ["Assam Goods and Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005632", ["Bihar Goods & Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005651", ["Chhattisgarh Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005574", ["Central Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005641", ["Delhi Goods and Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005637", ["Goa Goods and Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005575", ["Goods And Services Tax (Compensation To States) Act, 2017", "gst-new"]);
+        acts.set("102010000000005659", ["Gujarat Goods And Services Tax Act 2017", "gst-new"]);
+        acts.set("102010000000005639", ["Haryana Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005634", ["Himachal Pradesh Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005576", ["Integrated Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005649", ["Jharkhand Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005657", ["Karnataka Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005656", ["Kerala Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005650", ["Madhya Pradesh Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005636", ["Maharashtra Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005644", ["Odisha Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005655", ["Punjab Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005615", ["Rajasthan Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005654", ["Tamil Nadu Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005633", ["Telangana Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005577", ["Union Territory Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005638", ["Uttar Pradesh Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005661", ["Uttarakhand Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000005647", ["West Bengal Goods And Services Tax Act, 2017", "gst-new"]);
+        acts.set("102010000000000499", ["Prevention of Money Laundering Act, 2002", "gst-new"]);
+
+        return acts;
+    }
+
+    public static CirnotOtherActs(): { [key: string]: string[] } {
+        const acts: { [key: string]: string[] } = {};
+    
+        acts["999999999999999999"] = ["otheract", "direct-tax-laws,company-and-sebi,fema-banking-insurance,international-tax,transfer-pricing"];
+    
+        return acts;
+    }
+    
+
+   public static customTrimStart(input: string, chars?: string): string {
+        const charRegExp = chars ? new RegExp(`^[${chars}]+`) : /^\s+/;
+        return input.replace(charRegExp, '');
+      }
 
 }
 

@@ -3167,4 +3167,1513 @@ async function CaseLawsPartialIndex(dt: any, docType: number, templateid: string
     return reccount;
 }
 
+async function FormIndex(dt: any, docType: number, templateid: string): Promise<void> {
+    const batchSize: number = 100; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.length / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+
+    for (let i = 0; i < totalBatches; i++) {
+        const indexDocumentList: IndexDocument[] = [];
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, (i + 1) * batchSize);
+
+        if (dataRows.length > 0) {
+            for (const dr of dataRows) {
+                const objSuggest: CompletionField[] = [];
+                //console.log("log start for actid:" + dr["mid"] + "\r\n");
+
+                try {
+                    let elasticPDFPath = "";
+                    const indexDocument: IndexDocument = {
+                        id: dr["mid"].toString().trim(),
+                        mid: dr["id"].toString().trim(),
+                        templateid: templateid,
+                        documenttype: dr["documenttype"].toString().toLowerCase().trim(),
+                        documentformat: dr["documentformat"].toString().toLowerCase().trim(),
+                        filenamepath: (elasticPDFPath = dr["filenamepath"].toString().trim()),
+                    };
+
+                    if (dr["url"].toString().toLowerCase().indexOf(".pdf") !== -1 && !!indexDocument && !!indexDocument.filenamepath) {
+                        indexDocument.filenamepath = await Common.UploadPdfFilesOnAmazonS3Bucket(
+                            indexDocument.id,
+                            indexDocument.filenamepath
+                        );
+                    }
+
+                    //indexDocument.filenamepath = new Common().pdfFileManagement(indexDocument.id, indexDocument.filenamepath, "");
+                    //Common.CopyLinkFiles(indexDocument.mid, indexDocument.id);
+                    //Common.UploadImageOnAmazonS3Bucket(indexDocument.id);
+
+                    const year = dr["year"].toString().trim();
+                    if (!!year && year.indexOf("0000") === -1) {
+                        if (year.length > 4) {
+                            indexDocument.year = { id: year.substring(0, 18).trim(), name: year.substring(18, 4).trim() };
+                        } else {
+                            indexDocument.year = { id: year.trim(), name: year.trim() };
+                        }
+                    }
+                    //else {
+                    //    indexDocument.year = { id: "", name: "" };
+                    //}         
+
+                    //#region act associations
+                    let associationArray = !!dr["DDA_Acts"] ? String(dr["DDA_Acts"]).split('$') : null;
+                    if (associationArray != null && associationArray.length > 1) {
+                        let objActAssociations: Associate[] = [];
+                        let objSectionAssociations: Associate[] = [];
+                        let objAssociates: Associates = {} as Associates;
+
+                        for (let association of associationArray) {
+                            let associations = association.split('|');
+
+                            if (associations != null && associations.length > 1) {
+                                let objActAssociate: Associate = {} as Associate;
+                                let objSectionAssociate: Associate = {} as Associate;
+                                let actidsecid = associations[0].indexOf('#') !== -1 ? String(associations[0]).trim().split('#') : null;
+                                let type = associations[0] !== "" ? associations[1].split('^')[0].toLowerCase() : "";
+
+                                if (type.trim() === "act") {
+                                    if (!!associations[0]) {
+                                        objActAssociate.id = associations[0].trim();
+                                        objActAssociate.type = type;
+                                        objActAssociate.name = associations[1] !== "" ? associations[1].split('^')[1] : "";
+                                        objActAssociate.associatedDocid = "";
+                                        objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+
+                                        objActAssociations.push(objActAssociate);
+                                    }
+                                } else {
+                                    let objSBytes: number;
+                                    let section = associations[1] !== "" ? associations[1].split('^')[1] : "";
+
+                                    if (!!section && !isNaN(Number(section.charAt(0)))) {
+                                        section = "Section - " + section;
+                                    }
+
+                                    if (!!actidsecid && !!(actidsecid[1])) {
+                                        objSectionAssociate.id = actidsecid[1];
+                                        objSectionAssociate.type = type;
+                                        objSectionAssociate.name = section.indexOf('~') !== -1 ? section.split('~')[0] : section;
+                                        objSectionAssociate.ordering = section.indexOf('~') !== -1 ? section.split('~')[1] : "";
+
+                                        objSectionAssociate.associatedDocid = actidsecid[0];
+                                        objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+
+                                        objSectionAssociations.push(objSectionAssociate);
+                                    }
+                                }
+                            }
+                        }
+
+                        objAssociates.act = objActAssociations;
+                        objAssociates.section = objSectionAssociations;
+                        indexDocument.associates = objAssociates;
+                    }
+
+                    //#endregion
+
+                    //#region CAT SUBCAT BINDING
+                    let catSubCatArray = !!dr?.["categoriescentax"] ? String(dr["categoriescentax"])?.split('$') : null;
+                    if (catSubCatArray != null) {
+                        let objCatList: Category[] = [];
+                        for (let catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                let objCat: Category = {} as Category;
+                                let objSubCat: Subcategory = {} as Subcategory;
+                                let isprimarycat = catsubcat?.split('%')?.length > 1 ? parseInt(catsubcat?.split('%')?.[1]) : 0;
+
+                                if (catsubcat?.indexOf('|') > 0) {
+                                    let catidname = !!catsubcat ? catsubcat?.split('|') : null;
+                                    let mainCat = catidname?.[1]?.trim()?.split('^')?.[0]?.trim();
+                                    let isRequiredCategory =
+                                        mainCat?.includes("111050000000018392") ||
+                                        mainCat?.includes("111050000000018393") ||
+                                        mainCat?.includes("111050000000018400") ||
+                                        mainCat?.includes("111050000000018768") ||
+                                        mainCat?.includes("111050000000018769") ||
+                                        mainCat?.includes("111050000000018770") ||
+                                        mainCat?.includes("111050000000018771") ||
+                                        mainCat?.includes("111050000000018772") ||
+                                        mainCat?.includes("111050000000019031");
+
+                                    if (!isRequiredCategory) {
+                                        continue;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname?.[1]?.trim()?.split('^')?.[0]?.trim();
+                                            objCat.name = catidname?.[1]?.split('^')?.[1]?.trim()?.split('%')?.[0];
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname?.[0]?.trim()?.split('^')?.[0]?.trim();
+                                            objCat.name = catidname?.[0]?.split('^')?.[1]?.trim()?.split('%')?.[0];
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            if (catidname) objSubCat.id = catidname?.[2]?.trim()?.split('^')?.[0]?.trim();
+                                            if (catidname) objSubCat.name = catidname?.[2]?.split('^')?.[1]?.trim()?.split('%')?.[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                        default:
+                                            if (catidname) objSubCat.id = catidname?.[0]?.trim()?.split('^')?.[0]?.trim();
+                                            if (catidname) objSubCat.name = catidname?.[1]?.split('^')?.[1]?.trim()?.split('%')?.[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                    }
+
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat?.split('^')?.[0]?.trim();
+                                    objCat.name = catsubcat?.split('^')?.[1]?.trim()?.split('%')?.[0];
+                                    objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+
+                                objCatList.push(objCat);
+                            }
+                        }
+
+                        indexDocument.categories = objCatList;
+                    }
+
+
+                    //#endregion
+
+                    //#region Groups binding
+                    let groupSubgroupArray = !!dr?.["groups"] ? String(dr["groups"])?.split('|') : null;
+                    if (groupSubgroupArray != null) {
+                        let objGroups: Groups = {} as Groups;
+                        let objSubGroup: Subgroup = {} as Subgroup;
+                        objSubGroup.id = groupSubgroupArray?.[1]?.split('^')?.[0]?.trim();
+                        objSubGroup.name = groupSubgroupArray?.[1]?.split('^')?.[1]?.trim();
+                        objSubGroup.url = Common.GetUrl(objSubGroup?.name?.toLowerCase());
+
+                        let groupSubgroup = groupSubgroupArray?.[0]?.split('^');
+                        let groupId = groupSubgroup?.[0]?.trim();
+                        let groupName = docType === 3 ? "form" : groupSubgroup?.[1]?.trim();
+
+                        objGroups.group = {
+                            id: groupId,
+                            name: groupName,
+                            url: docType === 3 ? "form" : Common.GetUrl(groupName?.toLowerCase()?.trim()),
+                            subgroup: objSubGroup
+                        } as Group;
+
+                        indexDocument.groups = objGroups;
+
+                        if (!objSubGroup?.name?.trim()) {
+                            objSuggest?.push({
+                                Input: [objSubGroup?.name?.toLowerCase()?.trim()],
+                                Weight: 20
+                            } as CompletionField);
+                        }
+                    }
+                    //#endregion
+                    let objSByte: number;
+
+                    if (docType === 3) {
+                        let form = String(dr["Heading"]);
+                        if (!form?.trim() || !isNaN(Number(form?.charAt(0)))) {
+                            form = "Form - " + form;
+                        }
+                        indexDocument.heading = form;
+                    }
+
+                    indexDocument.subheading = String(dr["subheading"])?.trim();
+                    indexDocument.sortheading = String(dr["sortheading"])?.toLowerCase()?.trim();
+                    indexDocument.sortheadingnumber = String(dr["sortheadingnumber"])?.toLowerCase()?.trim();
+                    indexDocument.searchheadingnumber = String(dr["searchheadingnumber"])?.toLowerCase()?.trim();
+
+                    if (docType === 3) {
+                        indexDocument.parentheadings = [{ id: "", name: "", ordering: "", orderInteger: 0 }];
+                    }
+
+                    indexDocument.url = String(dr["url"])?.toLowerCase()?.trim();
+                    indexDocument.language = String(dr["language"])?.toLowerCase()?.trim();
+
+                    //#region subject master
+                    let caseSubjectArray = !!dr?.["FormSubject"] ? String(dr["FormSubject"])?.split('$') : null;
+                    let objsubjects: GenericInfo[] = [];
+
+                    if (caseSubjectArray != null && caseSubjectArray.length > 1) {
+                        for (let association of caseSubjectArray) {
+                            let associations = association?.split('|');
+
+                            if (associations != null && association.length > 1) {
+                                let objSubject: GenericInfo = {} as GenericInfo;
+
+                                let type = associations?.[0] !== "" ? associations?.[1]?.split('^')?.[0]?.toLowerCase() : "";
+
+                                if (type?.trim() === "subject") {
+                                    if (!!associations?.[0]) {
+                                        //string[] categories = Common.CasePopularActs()[associations[0]?.trim()]?.[1]?.split(',');
+                                        objSubject.id = associations?.[0]?.trim();
+                                        objSubject.type = type;
+                                        objSubject.name = associations?.[1] !== "" ? associations?.[1]?.split('^')?.[1]?.split('~')?.[0] : "";
+                                        objSubject.shortName = "";
+                                        objSubject.ordering = associations?.[1]?.split('^')?.[1]?.split('~')?.[1];
+                                        objSubject.orderInteger = 0;
+                                        objSubject.url = Common.GetUrl(objSubject?.name?.toLowerCase());
+                                        //objSubject.catUrls = categories;
+                                        objsubjects.push(objSubject);
+
+                                        if (!!objSubject?.name?.trim()) {
+                                            objSuggest?.push({
+                                                Input: [objSubject?.name?.toLowerCase()?.trim()],
+                                                Weight: 18
+                                            } as CompletionField);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //#endregion
+
+                    let multipleMasterInfo = !!dr?.["masterinfo"] ? String(dr["masterinfo"])?.split('$') : null;
+                    let objMasters: Masterinfo = {} as Masterinfo;
+                    let objMasterInfo: Info = {} as Info;
+
+                    let objForms: GenericInfo[] = [];
+                    let objStates: GenericInfo[] = [];
+                    let objlanguages: GenericInfo[] = [];
+                    let objinstructions: GenericInfo[] = [];
+                    let objFormTypes: GenericInfo[] = [];
+
+                    if (multipleMasterInfo != null && multipleMasterInfo.length > 1) {
+                        for (let masterInfo of multipleMasterInfo) {
+                            if (!!masterInfo) {
+                                let objform: GenericInfo = {} as GenericInfo;
+                                let objstate: GenericInfo = {} as GenericInfo;
+                                let objformtype: GenericInfo = {} as GenericInfo;
+
+                                let masterinfo = !!masterInfo ? String(masterInfo).split('|') : null;
+
+                                if (!!masterInfo) {
+                                    let objlanguage: GenericInfo = {} as GenericInfo;
+                                    let objinstruction: GenericInfo = {} as GenericInfo;
+
+                                    let type = String(masterinfo?.[1]?.split('^')?.[0])?.toLowerCase()?.trim();//Type
+
+                                    if (docType === 3) {
+                                        let parentName = String(masterinfo?.[1]?.split('^')?.[1]);
+
+                                        let MainPdfurl = "";
+                                        if (type === "language") {
+                                            let langInst = !!String(masterinfo?.[1]?.split('^')?.[1]) ? String(masterinfo?.[1]?.split('^')?.[1])?.split(',') : null;
+                                            if (!!langInst?.[0]) {
+                                                objlanguage.id = String(masterinfo?.[0])?.trim();
+                                                objlanguage.name = String(langInst?.[0])?.trim();
+                                                objlanguage.ordering = objlanguage?.name?.indexOf("#") !== -1 ? objlanguage?.name?.split('#')?.[1]?.trim() : "";
+                                                objlanguage.orderInteger = !!objlanguage?.ordering ? parseInt(objlanguage?.ordering) : 0;
+                                                objlanguage.type = type;
+                                                objlanguage.url = objlanguage?.name?.toLowerCase() === "english" ? elasticPDFPath : elasticPDFPath.replace(".pdf", "-" + objlanguage?.name + ".pdf").replace(".PDF", "-" + objlanguage?.name + ".pdf");
+                                                MainPdfurl = objlanguage?.url;
+                                                objlanguage.url = Common.pdfFileManagement(indexDocument.mid, objlanguage?.url, objlanguage?.type);
+                                                indexDocument.filenamepath = objlanguage?.url;
+                                                objlanguages?.push(objlanguage);
+                                            }
+
+                                            if (!!langInst && langInst?.length > 1 && !!langInst?.[1]) {
+                                                objinstruction.id = String(masterinfo?.[0])?.trim();
+                                                objinstruction.type = "Instruction";//Type
+                                                objinstruction.name = String(langInst?.[1])?.trim();
+                                                objinstruction.ordering = objinstruction?.name?.indexOf("#") !== -1 ? objinstruction?.name?.split('#')?.[1]?.trim() : "";
+                                                objinstruction.orderInteger = !!objinstruction?.ordering ? parseInt(objinstruction?.ordering) : 0;
+                                                objinstruction.url = Common.pdfFileManagement(indexDocument.mid, MainPdfurl?.replace("FormITR", "Instructions"), objinstruction?.type);
+                                                objinstructions?.push(objinstruction);
+                                            }
+                                        } else if (type.toLowerCase() === "form") {
+                                            if (parentName?.indexOf('#') !== -1) {
+                                                let nameOrder = parentName?.split('#');
+                                                objform.id = String(masterinfo?.[0])?.trim();
+                                                objform.name = String(nameOrder?.[0]);
+                                                objform.ordering = nameOrder?.[1]?.replace('$', ' ')?.trim();
+                                                objform.orderInteger = !!objform?.ordering ? parseInt(objform?.ordering) : 0;
+                                                objform.type = type;
+                                            } else {
+                                                objform.id = String(masterinfo?.[0])?.trim();
+                                                objform.name = parentName;
+                                                objform.ordering = "";
+                                                objform.orderInteger = 0;
+                                                objform.type = type;
+                                            }
+                                            objform.url = Common.GetUrl(objform?.name?.toLowerCase());
+                                            objForms?.push(objform);
+                                        } else if (type.toLowerCase() === "state") {
+                                            if (parentName?.indexOf('#') !== -1) {
+                                                let nameOrder = parentName?.split('#');
+                                                objstate.id = String(masterinfo?.[0])?.trim();
+                                                objstate.name = String(nameOrder?.[0]);
+                                                objstate.ordering = nameOrder?.[1];
+                                                objstate.orderInteger = !!objstate?.ordering ? parseInt(objstate?.ordering) : 0;
+                                                objstate.type = type;
+                                            } else {
+                                                objstate.id = String(masterinfo?.[0])?.trim();
+                                                objstate.name = parentName;
+                                                objstate.ordering = "";
+                                                objstate.orderInteger = 0;
+                                                objstate.type = type;
+                                            }
+                                            objstate.url = Common.GetUrl(objstate?.name?.toLowerCase());
+                                            objStates?.push(objstate);
+                                        } else if (type.toLowerCase() === "formtype") {
+                                            if (parentName?.indexOf('#') !== -1) {
+                                                let nameOrder = parentName?.split('#');
+                                                objformtype.id = String(masterinfo?.[0])?.trim();
+                                                objformtype.name = String(nameOrder?.[0]);
+                                                objformtype.ordering = nameOrder?.[1];
+                                                objformtype.orderInteger = !!objformtype?.ordering ? parseInt(objformtype?.ordering) : 0;
+                                                objformtype.type = type;
+                                            } else {
+                                                objformtype.id = String(masterinfo?.[0])?.trim();
+                                                objformtype.name = parentName;
+                                                objformtype.ordering = "";
+                                                objformtype.orderInteger = 0;
+                                                objformtype.type = type;
+                                            }
+                                            objformtype.url = Common.GetUrl(objformtype?.name?.toLowerCase());
+                                            objFormTypes?.push(objformtype);
+                                        }
+                                    }
+                                }
+                            }
+                            // #region masterinfoformno
+                            let masterInfoFormNo: GenericInfo[] = [];
+                            let mIFormNo: GenericInfo = {} as GenericInfo;
+                            mIFormNo.type = "form";
+                            if (indexDocument && indexDocument.heading) mIFormNo.name = indexDocument?.heading;
+                            mIFormNo.orderInteger = 0;
+                            if (indexDocument && indexDocument.heading) mIFormNo.url = indexDocument.heading.replace(" ", "").toLowerCase();
+                            masterInfoFormNo.push(mIFormNo);
+                            objMasterInfo.formno = masterInfoFormNo;
+                            // #endregion masterinfo formno
+
+                            objMasterInfo.language = objlanguages;
+                            objMasterInfo.instruction = objinstructions;
+                            objMasterInfo.form = objForms;
+                            objMasterInfo.formtype = objFormTypes;
+                            objMasterInfo.state = objStates;
+                            objMasterInfo.subject = objsubjects;
+                            objMasters.info = objMasterInfo;
+                            indexDocument.masterinfo = objMasters;
+                        }
+                    }
+
+                    let masterinfotext = !String(dr["masterinfo"]).toLowerCase().includes("$frmtyp") ? String(dr["masterinfo"]).toLowerCase().substring(0, String(dr["masterinfo"]).toLowerCase().indexOf("$frmtyp")) : String(dr["masterinfo"]).toLowerCase();
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(
+                        String(dr["categoriescentax"]).toLowerCase() + " " +
+                        String(dr["groups"]).toLowerCase() + " " +
+                        String(dr["year"]).toLowerCase() + " " +
+                        Common.StringOnly(masterinfotext) + " " +
+                        String(dr["Heading"]).trim() + " " +
+                        String(dr["subheading"]).trim()
+                    );
+                    indexDocument.shortcontent = String(dr["shortcontent"]).trim();
+
+                    // #region footnote region
+                    let fullContent = "";
+                    let footnotecontent: string[] = [];
+                    let doc = new DOMParser().parseFromString(String(dr["fullcontent"]), "text/html");
+                    let isHtmlFootnote = doc.querySelectorAll("div.footprint").length > 0;
+
+                    if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
+                        for (let item of doc.querySelectorAll("div.footprint")) {
+                            item.remove();
+                            footnotecontent.push(item.outerHTML);
+                        }
+                        let serializer = new XMLSerializer();
+                        fullContent = serializer.serializeToString(doc);
+                    } else if (String(dr["fullcontent"]).indexOf("<footnote>") !== -1) {
+                        let regexfootnote = /<footnote>(.*?)<\/footnote>/gis;
+                        let matchesfootnote = String(dr["fullcontent"]).match(regexfootnote);
+                        if (matchesfootnote) {
+                            footnotecontent = matchesfootnote;
+                        }
+                        fullContent = String(dr["fullcontent"]).replace(regexfootnote, "");
+                    } else {
+                        fullContent = String(dr["fullcontent"]);
+                    }
+                    indexDocument.footnotecontent = footnotecontent.join("");
+                    // #endregion footnote
+
+                    // #region remove header tag from full content
+                    if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    // #endregion
+
+                    // #region xml meta tag
+                    if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
+                        indexDocument.xmltag = Common.GetMetaTag(String(dr["fullcontent"]));
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    // #endregion
+
+                    indexDocument.fullcontent = fullContent.trim().endsWith("</document>") ?
+                        fullContent.trim().replace("</document>", "<div id='xmlmetadata' style='display:none;'>" + indexDocument.searchboosttext + "</div></document>") :
+                        fullContent.trim().endsWith("</html>") ?
+                            fullContent.trim().replace("</html>", "<div id='htmmetadata' style='display:none;'>" + indexDocument.searchboosttext + "</div></html>") :
+                            fullContent.trim() + "<div id='nodata' style='display:none;'>" + indexDocument.searchboosttext + "</div>";
+
+                    // Tagging Info
+                    let taggingInfo: string[] | null = !dr["TaggingInfo"] ? String(dr["TaggingInfo"]).split('$') : null;
+                    let objTags: Taginfo[] = [];
+
+                    if (taggingInfo != null && taggingInfo.length > 0) {
+                        for (let taginfo of taggingInfo) {
+                            let taginfos: string[] | null = taginfo ? taginfo.split('|') : null;
+                            if (taginfo && taginfos != null) {
+                                let objtaginfo: Taginfo = {} as Taginfo;
+                                objtaginfo.id = taginfos[1].split('^')[0];
+                                objtaginfo.name = taginfos[1].split('^')[1];
+                                objTags.push(objtaginfo);
+                            }
+                        }
+                    } else {
+                        let taginfos: string[] | null = dr["TaggingInfo"] ? String(dr["TaggingInfo"]).split('|') : null;
+                        if (taginfos != null && taginfos.length > 1) {
+                            let objtaginfo: Taginfo = {} as Taginfo;
+                            objtaginfo.id = taginfos[1].split('^')[0];
+                            objtaginfo.name = taginfos[1].split('^')[1];
+                            objTags.push(objtaginfo);
+                        }
+                    }
+
+                    indexDocument.taginfo = objTags;
+
+                    if (dr["TaggingInfo"].toString().trim() !== "" &&
+                        (dr["TaggingInfo"].toString() === "222210000000000002|TC1^Repealed Act" ||
+                            dr["TaggingInfo"].toString() === "222210000000000041|TC_Service_Tax_Repealed^Service Tax Repealed"
+                            //|| dr["TaggingInfo"].toString() === "222210000000000037|TCIBCOtheractrule^IBC Other act rule"
+                            //|| dr["TaggingInfo"].toString() === "222210000000000038|TCewaybill^e-way bill" 
+                            //|| dr["TaggingInfo"].toString() === "222210000000000039|FORM_Not_available^FORM Not available"
+                        )) {
+                        indexDocument.documenttypeboost = 0;
+                    } else {
+                        indexDocument.documenttypeboost = 7500;
+                    }
+
+                    if (indexDocument && indexDocument.heading && indexDocument.heading.trim() !== "") {
+                        objSuggest.push({
+                            Input: [indexDocument.heading.toLowerCase().trim()],
+                            Weight: 1
+                        });
+                    }
+
+                    indexDocument.documentdate = dr["documentdate"]?.toString().split('^')[0] ?? "19000101";
+                    if (indexDocument && indexDocument.documentdate)
+                        indexDocument.formatteddocumentdate = indexDocument.documentdate !== ""
+                            ? new Date(`${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}`)
+                            : new Date("1900-01-01");
+
+                    indexDocument.created_date = dr["created_date"]?.toString().length === 14
+                        ? new Date(`${dr["created_date"].toString().substring(0, 4)}-${dr["created_date"].toString().substring(4, 2)}-${dr["created_date"].toString().substring(6, 2)} ${dr["created_date"].toString().substring(8, 2)}:${dr["created_date"].toString().substring(10, 2)}:${dr["created_date"].toString().substring(12, 2)}`)
+                        : new Date("1900-01-01");
+
+                    indexDocument.Suggest = objSuggest;
+                    if (indexDocument && indexDocument.documentdate) {
+                        let formatteddate = indexDocument.documentdate !== ""
+                            ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}`
+                            : "1900-01-01";
+                    }
+                    if (dr["UpdatedDate"]?.toString().length > 13) {
+                        indexDocument.updated_date = new Date(`${dr["UpdatedDate"].toString().substring(0, 4)}-${dr["UpdatedDate"].toString().substring(4, 2)}-${dr["UpdatedDate"].toString().substring(6, 2)} ${dr["UpdatedDate"].toString().substring(8, 2)}:${dr["UpdatedDate"].toString().substring(10, 2)}:${dr["UpdatedDate"].toString().substring(12, 2)}`);
+                    } else if (dr["UpdatedDate"]?.toString().trim().length === 8) {
+                        indexDocument.updated_date = new Date(`${dr["UpdatedDate"].toString().substring(0, 4)}-${dr["UpdatedDate"].toString().substring(4, 2)}-${dr["UpdatedDate"].toString().substring(6, 2)}`);
+                    }
+
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date();
+                    indexDocument.lastQCDate = new Date();
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+
+                    let filteredCategory: Category[] = [];
+                    if (indexDocument && indexDocument.categories)
+                        for (const objCategory of indexDocument.categories) {
+                            const isRequiredCategory = (objCategory.id === "111050000000018392" || objCategory.id === "111050000000018393" || objCategory.id === "111050000000018400");
+                            if (objCategory.name)
+                                objCategory.name = objCategory.name.replace(/centax /gi, "").replace(/Centax /gi, "");
+                            if (isRequiredCategory) {
+                                filteredCategory.push(objCategory);
+                            }
+                        }
+                    indexDocument.categories = filteredCategory;
+
+
+
+                    indexDocumentList.push(indexDocument);
+                } catch (ex) {
+                    const mid = dr["mid"].toString();
+                    Common.LogError(ex, `MID = ${mid}`);
+                    console.error(`error: ${mid} ${ex.message}`);
+                    Common.LogErrorId(mid);
+                }
+
+            }
+            console.log(`Document Batch No completed: ${i}`);
+
+            let status: string = '';
+            if (indexType === 1) {
+                // status = await BulkIndexing(indexDocumentList, 'x', IndexLocalPath, IndexName, IndexDocument, docType);
+            } else {
+                // status = await BulkIndexing(indexDocumentList, 'x', IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            }
+        }
+    }
+
+    // At this point, the indexDocumentList contains the processed data
+    // Continue with the rest of your logic using the updated indexDocumentList
+}
+
+async function CirNotIndex(dt: any, docType: number, templateid: string): Promise<number> {
+    // const indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 20; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.length / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+    let reccount: number = 0;
+    for (let i: number = 0; i < totalBatches; i++) {
+        const indexDocumentList: IndexDocument[] = [];
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, i * batchSize + batchSize);
+        if (dataRows.length > 0) {
+            reccount = dataRows.length;
+            for (const dr of dataRows) {
+                const objSuggest: CompletionField[] = [];
+                //console.log("log start for actid:" + dr["mid"] + "\r\n");
+                try {
+                    const indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = dr["mid"]?.toString()?.trim() || "";
+                    indexDocument.mid = dr["id"]?.toString()?.trim() || "";
+                    indexDocument.excusdocid = dr["excusdocid"]?.toString()?.trim() || "";
+                    indexDocument.templateid = templateid;
+                    indexDocument.documenttype = dr["documenttype"]?.toString()?.toLowerCase()?.trim() || "";
+                    indexDocument.documentformat = dr["documentformat"]?.toString()?.toLowerCase()?.trim() || "";
+                    indexDocument.filenamepath = dr["url"]?.toString()?.trim() || "";
+                    indexDocument.filenamepath = Common.UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    //indexDocument.filenamepath = new Common().pdfFileManagement(indexDocument.id, indexDocument.filenamepath, "");
+                    //Common.UploadLinkFilesOnS3(indexDocument.id, "cirnot");
+                    Common.UploadLinkFilesOnS3Centax(indexDocument.mid, "cirnot", indexDocument.documentformat, dr["url"]?.toString()?.trim() || "", indexDocument.id);
+                    try {
+                        //Common.UploadImageOnAmazonS3Bucket(indexDocument.id, System.Configuration.ConfigurationManager.AppSettings["imagePath"]);
+                        Common.UploadImageOnAmazonS3BucketCentax(indexDocument.id, indexDocument.mid);
+                    } catch (ex) { Common.LogError(ex, "mid = " + dr["mid"] + "s3 upload error"); }
+                    //indexDocument.categories.Add(new Category() { id = "111050000000000002", name = "Direct Tax Laws", subcategory = new Subcategory() { id = "111050000000009187", name = "Direct Tax Laws" } });
+                    //indexDocument.groups = new Groups(){group= new Group() { id = "", name = "", subgroup = new Subgroup() { id = "", name = "", subsubgroup = new Subsubgroup() { id = "", name = "", subsubsubgroup = new Subsubsubgroup() { id = "", name = "", subsubsubsubgroup = new Subsubsubsubgroup() { id = "", name = "" } } } } } };
+                    const year: string = dr["year"]?.toString()?.trim() || "";
+                    if (!!year && year !== "0000") {
+                        if (year.length > 4)
+                            indexDocument.year = { id: year.substring(0, 18)?.trim() || "", name: year.substring(18, 4)?.trim() || "" };
+                        else
+                            indexDocument.year = { id: year?.trim() || "", name: year?.trim() || "" };
+                    } else
+                        indexDocument.year = { id: "", name: "" };
+
+                    //#region cat subcat binding
+                    const catSubCatArray = !!dr["categoriescentax"] ? dr["categoriescentax"].toString().split("$") : null;
+                    if (catSubCatArray !== null) {
+                        const objCatList: Category[] = [];
+                        for (const catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                // && catsubcat !== "111050000000000001^CORPORATE LAWS | 111050000000000007^CORPORATE LAWS"
+                                const isprimarycat: number = catsubcat.split("%").length > 1 ? parseInt(catsubcat.split("%")[1]) : 0;
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname: string[] = !!catsubcat ? catsubcat.split('|') : null;
+                                    const mainCat: string = catidname[1].trim().split('^')[0].trim();
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname[0].trim().split('^')[0].trim();
+                                            objCat.name = catidname[0].split('^')[1].trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objSubCat.id = catidname[2].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[2].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        default:
+                                            objSubCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                    }
+
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0].trim();
+                                    objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                    if (objCat && objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+                                objCatList.push(objCat);
+                            }
+                        }
+                        indexDocument.categories = objCatList;
+                    }
+                    //#endregion
+
+                    let documentType: string = "";
+
+                    //#region Groups binding
+                    const groupSubgroupArray = !!dr["groups"] ? dr["groups"].toString().split('|') : null;
+                    if (groupSubgroupArray !== null) {
+                        const objGroups: Groups = {} as Groups;
+                        const objSubGroup: Subgroup = {} as Subgroup;
+                        try {
+                            objSubGroup.id = groupSubgroupArray[2].split('^')[0].trim();
+                            objSubGroup.name = groupSubgroupArray[2].split('^')[1].trim();
+                            if (objSubGroup && objSubGroup.name) objSubGroup.url = Common.GetUrl(objSubGroup.name.toLowerCase());
+                        } catch (ex) {
+                            // Handle exception, if required
+                        }
+
+                        objGroups.group = {
+                            id: groupSubgroupArray[1].split('^')[0].trim(),
+                            name: docType === 3 ? "form" : groupSubgroupArray[1].split('^')[1].trim(),
+                            url: docType === 3 ? "form" : Common.GetUrl(groupSubgroupArray[1].split('^')[1].toLowerCase().trim()),
+                            subgroup: objSubGroup
+                        };
+                        //objSubGroup.subsubgroup = [];
+                        indexDocument.groups = objGroups;
+                    }
+                    //#endregion group binding
+
+                    //#region heading Correction
+                    let HeadingPrefix: string = "";
+                    indexDocument.heading = dr["heading"]?.toString().trim() || "";
+                    //if (!indexDocument.heading.toLowerCase().includes("press release")) {
+                    //    indexDocument.heading = indexDocument.heading.replace(/Circular No./i, "");
+                    //    indexDocument.heading = indexDocument.heading.replace(/Notification No./i, "");
+                    //    if (indexDocument.groups.group.name.toLowerCase() === "circular" && !indexDocument.heading.toLowerCase().includes("circular"))
+                    //        HeadingPrefix = "Circular No. ";
+                    //    else if (indexDocument.groups.group.name.toLowerCase() === "notification" && !indexDocument.heading.toLowerCase().includes("notification"))
+                    //        HeadingPrefix = "Notification No. ";
+
+                    //    indexDocument.heading = HeadingPrefix + indexDocument.heading;
+                    //}
+                    //#endregion heading Correction End
+
+                    const objMasters: Masterinfo = {} as Masterinfo;
+                    const objMasterInfo: Info = {} as Info;
+                    const objAssociates: Associates = {} as Associates;
+                    //#region subject master
+                    const caseSubjectArray = !!dr["CirNotSubject"] ? dr["CirNotSubject"].toString().split("$") : null;
+                    const objsubjects: GenericInfo[] = [];
+
+                    if (caseSubjectArray !== null && caseSubjectArray.length > 1) {
+                        for (const association of caseSubjectArray) {
+                            const associations = association.split('|');
+
+                            if (associations !== null && associations.length > 1) {
+                                const objSubject: GenericInfo = {} as GenericInfo;
+
+                                const type: string = associations[0].trim() !== "" ? associations[1].split('^')[0].toLowerCase() : "";
+                                if (type.trim() === "subject") {
+                                    if (!!associations[0]) {
+                                        objSubject.id = associations[0].trim();
+                                        objSubject.type = type;
+                                        objSubject.name = associations[1] !== "" ? associations[1].split('^')[1].split('~')[0] : "";
+                                        objSubject.shortName = "";
+                                        objSubject.ordering = associations[1].split('^')[1].split('~')[1];
+                                        objSubject.orderInteger = 0;
+                                        objSubject.url = Common.GetUrl(objSubject.name.toLowerCase());
+                                        //objSubject.catUrls = categories;
+                                        objsubjects.push(objSubject);
+                                        if (!!objSubject.name.trim()) {
+                                            objSuggest.push({
+                                                Input: [objSubject.name.toLowerCase().trim()],
+                                                Weight: 18
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //#endregion
+
+                    //#region act associations
+                    const associationArray = !!dr["ActAssociation"] ? dr["ActAssociation"].toString().split("$") : null;
+                    if (associationArray != null && associationArray.length > 1) {
+                        const objActs: GenericInfo[] = [];
+                        const objSections: GenericInfo[] = [];
+                        const objActAssociations: Associate[] = [];
+                        const objSectionAssociations: Associate[] = [];
+
+                        for (const association of associationArray) {
+                            const associations = association.split("|");
+
+                            if (associations != null && associations.length > 1) {
+                                const objAct: GenericInfo = {} as GenericInfo;
+                                const objSection: GenericInfo = {} as GenericInfo;
+                                const objActAssociate: Associate = {} as Associate;
+                                const objSectionAssociate: Associate = {} as Associate;
+                                const actidsecid = associations[0].indexOf("#") !== -1 ? associations[0].trim().split("#") : null;
+                                const type = associations[0] !== "" ? associations[1].split("^")[0].toLowerCase() : "";
+                                if (type.toLowerCase().trim() == "act") {
+                                    if (!!Common.CirnotPopularActs().get(associations[0].trim())) { // for popular acts
+                                        const categories = Common.CirnotPopularActs().get(associations[0].trim())![1].split(",");
+                                        objAct.id = objActAssociate.id = associations[0].trim();
+                                        objAct.type = objActAssociate.type = type;
+                                        objAct.name = objActAssociate.name = associations[1] !== "" ? associations[1].split("^")[1].split("~")[0] : "";
+                                        objAct.shortName = "";
+                                        objAct.ordering = associations[1].split("^")[1].split("~")[1];
+                                        objAct.orderInteger = 0;
+                                        objActAssociate.associatedDocid = "";
+                                        objAct.url = objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+                                        objAct.catUrls = categories;
+                                    } else { // for other acts
+                                        const categories = Common.CirnotOtherActs()["999999999999999999"][1].split(",");
+                                        objAct.id = "999999999999999999";
+                                        objAct.type = type;
+                                        objAct.name = "Other Acts";
+                                        objAct.shortName = "";
+                                        objAct.ordering = "999999999";
+                                        objAct.orderInteger = 0;
+                                        objAct.url = Common.GetUrl(objAct.name.toLowerCase());
+                                        objAct.catUrls = categories;
+                                        objActAssociate.id = associations[0].trim();
+                                        objActAssociate.type = type;
+                                        objActAssociate.name = associations[1] !== "" ? associations[1].split("^")[1].split("~")[0] : "";
+                                        objActAssociate.ordering = associations[1].split("^")[1].split("~")[1];
+                                        objActAssociate.associatedDocid = "";
+                                        objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+                                    }
+                                    // if (!!objAct.name.trim())
+                                    //  objSuggest.push(objAct.name.trim());
+                                    objActs.push(objAct);
+                                    objActAssociations.push(objActAssociate);
+                                } else {
+                                    let objSByte: number;
+                                    let section = associations[1] !== "" ? associations[1].split("^")[1] : "";
+                                    if (!!section && Number.isInteger(parseInt(section.charAt(0)))) {
+                                        section = "Section - " + section;
+                                    }
+                                    const parentsectioininfo = !!dr["parentsectioninfo"] ? dr["parentsectioninfo"].toString().split("$") : null;
+                                    let isparentsection = false;
+                                    if (parentsectioininfo != null) {
+                                        for (const parentsection of parentsectioininfo) {
+                                            if (parentsection.indexOf(actidsecid[1].trim()) !== -1) {
+                                                const parentsectionidname = parentsection.substring(parentsection.indexOf("#")).split("|");
+                                                objSectionAssociate.id = parentsectionidname[0].replace("#", " ").trim();
+                                                objSectionAssociate.name = parentsectionidname[1].replace("^", "-").split("~")[0];
+                                                objSectionAssociate.ordering = parentsectionidname[1].replace("^", "-").split("~")[1];
+                                                objSectionAssociate.actsectionid = actidsecid[0].trim() + parentsectionidname[0].replace("#", " ").trim();
+                                                isparentsection = true;
+                                            }
+                                        }
+                                    }
+                                    const sectionName = section.indexOf("~") !== -1 ? section.split("~")[0].trim() : section.trim();
+                                    if (!!sectionName) {
+                                        if (!!Common.CirnotPopularActs().get(actidsecid[0].trim())) { // section if popular acts
+                                            objSection.id = actidsecid[1];
+                                            objSection.pid = actidsecid[0];
+                                            objSection.type = type;
+                                            objSection.name = sectionName;
+                                            objSection.shortName = "";
+                                            objSection.ordering = section.indexOf("~") !== -1 ? section.split("~")[1] : "";
+                                            objSection.orderInteger = 0;
+                                            objSection.url = Common.GetUrl(objSection.name.toLowerCase());
+
+                                            if (!isparentsection) {
+                                                objSectionAssociate.id = actidsecid[1];
+                                                objSectionAssociate.name = sectionName;
+                                                objSectionAssociate.ordering = section.indexOf("~") !== -1 ? section.split("~")[1] : "";
+                                                objSectionAssociate.actsectionid = actidsecid[0].trim() + actidsecid[1].trim();
+                                            }
+                                            objSectionAssociate.type = type;
+                                            objSectionAssociate.associatedDocid = actidsecid[0];
+                                            objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+
+                                        } else {
+                                            if (!!sectionName) {
+                                                if (!isparentsection) {
+                                                    objSectionAssociate.id = actidsecid[1];
+                                                    objSectionAssociate.name = sectionName;
+                                                    objSectionAssociate.ordering = section.indexOf("~") !== -1 ? section.split("~")[1] : "";
+                                                    objSectionAssociate.actsectionid = actidsecid[0].trim() + actidsecid[1].trim();
+                                                }
+                                                objSectionAssociate.type = type;
+                                                objSectionAssociate.associatedDocid = actidsecid[0];
+                                                objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+                                            }
+                                        }
+
+                                        // if (!!objSection.name)
+                                        //  objSuggest.push(objSection.name.trim());
+
+                                        objSections.push(objSection);
+                                        objSectionAssociations.push(objSectionAssociate);
+                                    }
+                                }
+                            }
+                        }
+
+                        // #region masterinfo Cirnot
+                        const masterInfoCirnot: GenericInfo[] = [];
+                        const GenericInfoCirnot: GenericInfo = {} as GenericInfo;
+                        if (indexDocument.heading) GenericInfoCirnot.name = indexDocument.heading;
+                        masterInfoCirnot.push(GenericInfoCirnot);
+                        objMasterInfo.cirnot = masterInfoCirnot;
+                        // #endregion masterinfo cirnot
+
+                        // #region case referred associations
+                        const dollarspearator = "$$";
+                        const affirmreverseAssociation = !!dr["arinfo"] ? dr["arinfo"].toString().split(dollarspearator).filter((item) => item !== "") : null;
+                        let counti = 0;
+                        if (affirmreverseAssociation != null && affirmreverseAssociation.length > 0) {
+                            const objaffirmreverseAssociations: Associate[] = [];
+                            for (const association of affirmreverseAssociation) {
+                                counti++;
+                                const associations = association.split("^");
+
+                                if (associations != null && associations.length > 1) {
+                                    const objaffirmReverseAssociate: Associate = {} as Associate;
+
+                                    const idtype = associations[0].indexOf("|") !== -1 ? associations[0].trim().split("|") : null;
+                                    const spearator = "##";
+                                    const namedate = associations[1].indexOf("##") !== -1 ? associations[1].split(spearator).filter((item) => item !== "") : null;
+                                    if (idtype == null || namedate == null) {
+                                        const a = "";
+                                    }
+                                    if (idtype != null && !!idtype[1]) {
+                                        try {
+                                            objaffirmReverseAssociate.id = idtype[0].trim();
+                                            objaffirmReverseAssociate.type = idtype[1];
+                                            objaffirmReverseAssociate.name = !!namedate ? !!namedate[0] ? namedate[0] : "" : "";
+                                            const atspearator = "@@";
+                                            objaffirmReverseAssociate.date = !!namedate ? namedate[1].indexOf("@@") !== -1 ? Common.converttoyymmdd(namedate[1].split(atspearator).filter((item) => item !== "")[0]) : "" : "";
+                                            objaffirmReverseAssociate.subheading = !!namedate ? namedate[1].indexOf("@@") !== -1 ? namedate[1].split(atspearator).filter((item) => item !== "")[1].split("~")[0] : "" : "";
+                                            objaffirmReverseAssociate.associatedDocid = !!namedate ? namedate[1].indexOf("@@") !== -1 ? namedate[1].split(atspearator).filter((item) => item !== "")[1].split("~")[1] : "" : "";
+                                            objaffirmReverseAssociate.url = Common.GetUrl(objaffirmReverseAssociate.name.toLowerCase());
+                                            objaffirmreverseAssociations.push(objaffirmReverseAssociate);
+                                        } catch (ex) {
+                                            Common.LogError(ex, "error in affirm");
+                                            throw ex;
+                                        }
+
+                                    }
+
+                                }
+
+                            }
+                            objAssociates.affirmreverse = objaffirmreverseAssociations;
+
+                        }
+                        // #endregion
+
+                        objAssociates.act = objActAssociations;
+                        objAssociates.section = objSectionAssociations;
+                        objMasterInfo.act = objActs;
+                        objMasterInfo.section = objSections;
+                        objMasterInfo.subject = objsubjects;
+                        objMasters.info = objMasterInfo;
+
+                    }
+                    // else
+                    // {
+                    //    indexDocument.associates = new List<Associate>() { new Associate() { id = "", type="", name = "", url="", associatedDocid="" } };
+                    // }
+                    // #endregion
+
+                    //#region cirnot association
+                    const cirnotAssociation = !!dr["DDA_Experts"] ? dr["DDA_Experts"].split('$') : null;
+                    if (cirnotAssociation != null && cirnotAssociation.length > 1) {
+                        const objcirnotAssociations: Associate[] = [];
+
+                        for (const association of cirnotAssociation) {
+                            const objcirnotAssociate: Associate = {} as Associate;
+                            const associations = association.split('|');
+                            if (associations != null && associations.length > 1) {
+                                objcirnotAssociate.id = associations[0].trim();
+                                objcirnotAssociate.type = associations[1].split('^')[0].trim().toLowerCase();
+                                objcirnotAssociate.name = associations[1].split('^')[1].trim();
+                                objcirnotAssociate.subheading = associations[1].split('^')[2].trim();
+                                objcirnotAssociations.push(objcirnotAssociate);
+                            }
+                        }
+                        objAssociates.expert = objcirnotAssociations;
+                    }
+
+                    indexDocument.associates = objAssociates;
+
+                    // string heading = Convert.ToString(dr["Heading"]).Trim();
+                    // if (!heading.toLowerCase().contains("circular no"))
+                    //     heading = "Circular No " + heading;
+                    // indexDocument.heading = heading;
+
+                    indexDocument.subheading = dr["subheading"].toString().trim();
+                    indexDocument.sortheading = dr["sortheading"].toString().toLowerCase().trim();
+                    indexDocument.sortheadingnumber = dr["sortheadingnumber"].toString().toLowerCase().trim();
+                    indexDocument.searchheadingnumber = Common.RemoveSpecialCharacterWithSpace(dr["searchheadingnumber"].toString().toLowerCase().trim());
+
+                    indexDocument.url = dr["url"].toString().toLowerCase().trim();
+                    indexDocument.language = dr["language"].toString().toLowerCase().trim();
+
+                    const objStates: GenericInfo[] = [];
+                    const stateinfo = !!dr["masterinfo"] ? dr["masterinfo"].split('|') : null;
+                    if (stateinfo != null && dr["masterinfo"].toString().length > 5) {
+                        const objState: GenericInfo = {
+                            id: stateinfo[0],
+                            type: stateinfo[1].split('^')[0],
+                            name: stateinfo[1].split('^')[1],
+                            shortName: "",
+                            ordering: stateinfo[1].split('^')[1].toLowerCase(),
+                            orderInteger: 0,
+                            url: Common.GetUrl(stateinfo[1].split('^')[1].toLowerCase()),
+                        } as GenericInfo;
+                        objStates.push(objState);
+                    }
+                    objMasterInfo.state = objStates;
+
+                    const objDocTypes: GenericInfo[] = [];
+                    const doctypeinfo = !!documentType ? documentType.split('|') : null;
+                    if (doctypeinfo != null && doctypeinfo.length > 1) {
+                        const objdoctype: GenericInfo = {
+                            id: doctypeinfo[0],
+                            type: doctypeinfo[1],
+                            name: doctypeinfo[2],
+                            shortName: "",
+                            ordering: doctypeinfo[2].toLowerCase(),
+                            orderInteger: 0,
+                            url: Common.GetUrl(doctypeinfo[2].toLowerCase()),
+                        } as GenericInfo;
+                        objDocTypes.push(objdoctype);
+                    }
+                    objMasterInfo.cirnotdoctype = objDocTypes;
+
+                    indexDocument.masterinfo = objMasters;
+                    //#endregion
+
+
+                    // #region iltinfo
+
+                    const objIltInfoes: Iltinfo[] = [];
+                    const searchIltCitation: FormattedCitation[] = [];
+
+                    if (dr.iltinfo?.indexOf('$') !== -1) {
+                        const citationInfoes = dr.iltinfo?.split('$') || null;
+                        if (citationInfoes !== null) {
+                            for (const citationInfo of citationInfoes) {
+                                const objFormattedCitation: FormattedCitation = {};
+                                const objCountry1: iltinfo = {} as iltinfo;
+                                const objCountry2: iltinfo = {} as iltinfo;
+                                const objArticle: iltinfo = {} as iltinfo;
+                                const objSubject: iltinfo = {} as iltinfo;
+                                const objSubSubject: iltinfo = {} as iltinfo;
+                                const cnty1cnty2artsub = citationInfo?.split('|') || null;
+
+                                if (cnty1cnty2artsub?.[0] != null) {
+                                    objCountry1.id = cnty1cnty2artsub[0]?.split('^')[0];
+                                    objCountry1.name = cnty1cnty2artsub[0]?.split('^')[1];
+                                    objCountry1.shortName = '';
+                                    objCountry1.ordering = cnty1cnty2artsub[0]?.split('^')[1]?.toLowerCase();
+                                    objCountry1.type = 'country1';
+                                    objCountry1.url = Common.GetUrl(objCountry1.name);
+                                }
+
+                                if (cnty1cnty2artsub?.[1]?.length > 5) {
+                                    objCountry2.id = cnty1cnty2artsub[1]?.split('^')[0];
+                                    objCountry2.pid = objCountry1.id;
+                                    objCountry2.name = cnty1cnty2artsub[1]?.split('^')[1];
+                                    objCountry2.shortName = '';
+                                    objCountry2.ordering = cnty1cnty2artsub[1]?.split('^')[1]?.toLowerCase();
+                                    objCountry2.type = 'country2';
+                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                } else {
+                                    objCountry2.id = '000000000000000000';
+                                    objCountry2.pid = objCountry1.id;
+                                    objCountry2.name = '';
+                                    objCountry2.shortName = '';
+                                    objCountry2.ordering = '';
+                                    objCountry2.type = 'country2';
+                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                }
+
+                                if (cnty1cnty2artsub?.[2]?.length > 5) {
+                                    objArticle.id = cnty1cnty2artsub[2]?.split('^')[0];
+                                    objArticle.name = cnty1cnty2artsub[2]?.split('^')[1];
+                                    objArticle.pid = objCountry1.id + objCountry2.id;
+                                    objArticle.shortName = '';
+                                    objArticle.ordering = cnty1cnty2artsub[2]?.split('^')[1]?.toLowerCase();
+                                    objArticle.type = 'article';
+                                    objArticle.url = Common.GetUrl(objArticle.name);
+                                } else {
+                                    objArticle.id = '000000000000000000';
+                                    objArticle.name = '';
+                                    objArticle.pid = objCountry1.id + objCountry2.id;
+                                    objArticle.shortName = '';
+                                    objArticle.ordering = '';
+                                    objArticle.type = 'article';
+                                    objArticle.url = '';
+                                }
+
+                                if (cnty1cnty2artsub?.[3]?.length > 5) {
+                                    objSubject.id = cnty1cnty2artsub[3]?.split('^')[0];
+                                    objSubject.pid = objCountry1.id + objCountry2.id;
+                                    objSubject.name = cnty1cnty2artsub[3]?.split('^')[1];
+                                    objSubject.shortName = '';
+                                    objSubject.ordering = cnty1cnty2artsub[3]?.split('^')[1]?.toLowerCase();
+                                    objSubject.type = 'subject';
+                                    objSubject.url = Common.GetUrl(objSubject.name);
+                                } else {
+                                    objSubject.id = '000000000000000000';
+                                    objSubject.name = '';
+                                    objSubject.pid = objCountry1.id + objCountry2.id;
+                                    objSubject.shortName = '';
+                                    objSubject.ordering = '';
+                                    objSubject.type = 'subject';
+                                    objSubject.url = '';
+                                }
+
+                                if (cnty1cnty2artsub?.[4]?.length > 5) {
+                                    objSubSubject.id = cnty1cnty2artsub[4]?.split('^')[0];
+                                    objSubSubject.pid = objSubject.id;
+                                    objSubSubject.name = cnty1cnty2artsub[4]?.split('^')[1];
+                                    objSubSubject.shortName = '';
+                                    objSubSubject.ordering = cnty1cnty2artsub[4]?.split('^')[1]?.toLowerCase();
+                                    objSubSubject.type = 'subsubject';
+                                    objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                                } else {
+                                    objSubSubject.id = '000000000000000000';
+                                    objSubSubject.pid = objSubject.id;
+                                    objSubSubject.name = '';
+                                    objSubSubject.shortName = '';
+                                    objSubSubject.ordering = '';
+                                    objSubSubject.type = 'subsubject';
+                                    objSubSubject.url = '';
+                                }
+
+                                searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+
+                                objIltInfoes.push({ country1: objCountry1, country2: objCountry2, article: objArticle, subject: objSubject, subsubject: objSubSubject });
+                            }
+                        }
+                    } else {
+                        const objFormattedCitation: FormattedCitation = {};
+                        const objCountry1: iltinfo = {} as iltinfo;
+                        const objCountry2: iltinfo = {} as iltinfo;
+                        const objArticle: iltinfo = {} as iltinfo;
+                        const objSubject: iltinfo = {} as iltinfo;
+                        const objSubSubject: iltinfo = {} as iltinfo;
+                        const cnty1cnty2artsub = dr.iltinfo?.split('|') || null;
+
+                        if (cnty1cnty2artsub !== null) {
+                            objCountry1.id = cnty1cnty2artsub[0]?.split('^')[0];
+                            objCountry1.name = cnty1cnty2artsub[0]?.split('^')[1];
+                            objCountry1.shortName = '';
+                            objCountry1.ordering = cnty1cnty2artsub[0]?.split('^')[1]?.toLowerCase();
+                            objCountry1.type = 'country1';
+                            objCountry1.url = Common.GetUrl(objCountry1.name);
+                        }
+
+                        if (cnty1cnty2artsub?.[1]?.length > 5) {
+                            objCountry2.id = cnty1cnty2artsub[1]?.split('^')[0];
+                            objCountry2.pid = objCountry1.id;
+                            objCountry2.name = cnty1cnty2artsub[1]?.split('^')[1];
+                            objCountry2.shortName = '';
+                            objCountry2.ordering = cnty1cnty2artsub[1]?.split('^')[1]?.toLowerCase();
+                            objCountry2.type = 'country2';
+                            objCountry2.url = Common.GetUrl(objCountry2.name);
+                        } else {
+                            objCountry2.id = '';
+                            objCountry2.pid = '';
+                            objCountry2.name = '';
+                            objCountry2.shortName = '';
+                            objCountry2.ordering = '';
+                            objCountry2.type = 'country2';
+                            objCountry2.url = Common.GetUrl(objCountry2.name);
+                        }
+
+                        if (cnty1cnty2artsub?.[2]?.length > 5) {
+                            objArticle.id = cnty1cnty2artsub[2]?.split('^')[0];
+                            objArticle.name = cnty1cnty2artsub[2]?.split('^')[1];
+                            objArticle.shortName = '';
+                            objArticle.ordering = cnty1cnty2artsub[2]?.split('^')[1]?.toLowerCase();
+                            objArticle.type = 'article';
+                            objArticle.url = Common.GetUrl(objArticle.name);
+                        } else {
+                            objArticle.id = '';
+                            objArticle.name = '';
+                            objArticle.shortName = '';
+                            objArticle.ordering = '';
+                            objArticle.type = 'article';
+                            objArticle.url = '';
+                        }
+
+                        if (cnty1cnty2artsub?.[3]?.length > 5) {
+                            objSubject.id = cnty1cnty2artsub[3]?.split('^')[0];
+                            objSubject.name = cnty1cnty2artsub[3]?.split('^')[1];
+                            objSubject.shortName = '';
+                            objSubject.ordering = cnty1cnty2artsub[3]?.split('^')[1]?.toLowerCase();
+                            objSubject.type = 'subject';
+                            objSubject.url = Common.GetUrl(objSubject.name);
+                        } else {
+                            objSubject.id = '';
+                            objSubject.name = '';
+                            objSubject.shortName = '';
+                            objSubject.ordering = '';
+                            objSubject.type = 'subject';
+                            objSubject.url = '';
+                        }
+
+                        if (cnty1cnty2artsub?.[4]?.length > 5) {
+                            objSubSubject.id = cnty1cnty2artsub[4]?.split('^')[0];
+                            objSubSubject.pid = objSubject.id;
+                            objSubSubject.name = cnty1cnty2artsub[4]?.split('^')[1];
+                            objSubSubject.shortName = '';
+                            objSubSubject.ordering = cnty1cnty2artsub[4]?.split('^')[1]?.toLowerCase();
+                            objSubSubject.type = 'subsubject';
+                            objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                        } else {
+                            objSubSubject.id = '';
+                            objSubSubject.name = '';
+                            objSubSubject.shortName = '';
+                            objSubSubject.ordering = '';
+                            objSubSubject.type = 'subsubject';
+                            objSubSubject.url = '';
+                        }
+
+                        searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+
+                        objIltInfoes.push({ country1: objCountry1, country2: objCountry2, article: objArticle, subject: objSubject, subsubject: objSubSubject });
+                    }
+
+                    indexDocument.masterinfo = objMasters;
+                    const objSearchIltCit: SearchIltCitation = { formattediltcitation: searchIltCitation };
+                    indexDocument.searchiltcitation = objSearchIltCit;
+
+                    objMasters.iltinfoes = objIltInfoes;
+                    // #endregion iltinfo end
+
+                    // #region marking info
+                    const markinginfoArray = !!String(dr["MarkingInfo"]) ? String(dr["MarkingInfo"]).split('$') : null;
+                    let topStoryHeading = '';
+                    let topStoryDesc = '';
+                    if (markinginfoArray !== null) {
+                        const objMarkingInfoes: Markinginfo[] = [];
+                        let num: number = 0;
+
+                        for (const markinginfo of markinginfoArray) {
+                            num++;
+                            const markings = markinginfo.split('|');
+                            if (markings !== null && markings.length > 1) {
+                                const marking1 = markings[1].replace("&#39;", "'");
+                                const markingInfo: Markinginfo = {
+                                    number: num,
+                                    text: markings[0].toLowerCase(),
+                                    image: marking1.split('^')[0],
+                                };
+
+                                if (num === 1) {
+                                    topStoryHeading = marking1.split('^')[1].split(new RegExp("##", "g"))[0];
+                                    topStoryDesc = marking1.split('^')[1].indexOf("##") !== -1 ?
+                                        marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[0] :
+                                        marking1.split('^')[1];
+                                }
+
+                                const pmark = marking1.indexOf("@@e") !== -1 ?
+                                    marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[1] :
+                                    "";
+                                const parentmark = marking1.indexOf("@@t") !== -1 ? pmark.split(new RegExp("@@t", "g")) : null;
+                                markingInfo.entrydate = marking1.split('^')[1].indexOf("##") !== -1 ?
+                                    marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[0] :
+                                    "";
+                                markingInfo.updateddate = marking1.split('^')[1].indexOf("##") !== -1 ?
+                                    marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[0] :
+                                    "";
+
+                                if (parentmark !== null) {
+                                    markingInfo.parentmarking = Common.customTrimStart(parentmark[0] + ", " + parentmark[1], ',').trim().toLowerCase();
+                                }
+
+                                objMarkingInfoes.push(markingInfo);
+                            }
+                        }
+
+                        indexDocument.markinginfo = objMarkingInfoes;
+                    } else {
+                        indexDocument.markinginfo = [{ number: 0, text: "", image: "", entrydate: new Date().toDateString(), updateddate: new Date().toDateString() }];
+                    }
+                    indexDocument.topstoryheading = topStoryHeading;
+                    indexDocument.topstorydesc = topStoryDesc;
+                    // #endregion end marking info
+
+                    // #region Tagging Info
+                    const taggingInfo = !!String(dr["TagInfo"]) ? String(dr["TagInfo"]).split('$') : null;
+                    const objTags: Taginfo[] = [];
+                    if (taggingInfo !== null && taggingInfo.length > 0) {
+                        for (const taginfo of taggingInfo) {
+                            const taginfos = !!taginfo ? taginfo.split('|') : null;
+                            if (!!taginfos) {
+                                const objtaginfo: Taginfo = {
+                                    id: taginfos[1].split('^')[0],
+                                    name: taginfos[1].split('^')[1],
+                                };
+                                objTags.push(objtaginfo);
+                            }
+                        }
+                    } else {
+                        const taginfos = !!String(dr["TagInfo"]) ? String(dr["TagInfo"]).split('|') : null;
+                        if (taginfos !== null) {
+                            const objtaginfo: Taginfo = {
+                                id: taginfos[1].split('^')[0],
+                                name: taginfos[1].split('^')[1],
+                            };
+                            objTags.push(objtaginfo);
+                        }
+                    }
+                    indexDocument.taginfo = objTags;
+                    // #endregion Tagging info end
+
+
+                    // #region searchboosttext entry
+                    let cirnotnum = '';
+                    if (String(dr["groups"]).indexOf("111050000000000113") !== -1) {
+                        indexDocument.documenttypeboost = 3000;
+                        cirnotnum = "circular no " + String(dr["Heading"]).toLowerCase();
+                    } else if (String(dr["groups"]).indexOf("111050000000000110") !== -1) {
+                        indexDocument.documenttypeboost = 2500;
+                        cirnotnum = "notification no " + String(dr["Heading"]).toLowerCase();
+                    } else {
+                        indexDocument.documenttypeboost = 1500;
+                        cirnotnum = String(dr["Heading"]).toLowerCase();
+                    }
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(
+                        String(dr["year"]).toLowerCase() +
+                        " " +
+                        Common.StringOnly(String(dr["masterinfo"])).toLowerCase() +
+                        " " +
+                        String(dr["documentdate"]).toLowerCase() +
+                        " " +
+                        String(dr["categoriescentax"]).toLowerCase() +
+                        " " +
+                        String(dr["groups"]).toLowerCase() +
+                        " " +
+                        cirnotnum +
+                        " " +
+                        indexDocument.subheading
+                    );
+                    indexDocument.shortcontent = String(dr["shortcontent"]).trim();
+                    // #region footnote region
+                    let fullContent = '';
+                    let footnotecontent = '';
+                    const doc = new DOMParser().parseFromString(String(dr["fullcontent"]), "text/html");
+                    const isHtmlFootnote = doc.querySelector("div.footprint") !== null;
+
+                    if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
+                        const footprintDivs = doc.querySelectorAll("div.footprint");
+                        for (const item of Array.from(footprintDivs)) {
+                            item.remove();
+                            footnotecontent += item.outerHTML;
+                        }
+                        fullContent = doc.documentElement.innerHTML;
+                    } else if (String(dr["fullcontent"]).indexOf("<footnote>") !== -1) {
+                        const regexfootnote = /<footnote>(.*?)<\/footnote>/gs;
+                        const matchesfootnote = String(dr["fullcontent"]).match(regexfootnote);
+                        if (matchesfootnote !== null) {
+                            footnotecontent = matchesfootnote.join("");
+                        }
+                        fullContent = String(dr["fullcontent"]).replace(regexfootnote, "");
+                    } else {
+                        fullContent = String(dr["fullcontent"]);
+                    }
+                    indexDocument.footnotecontent = footnotecontent;
+                    // #endregion footnote
+
+                    // #region remove header tag from full content
+                    if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    // #endregion
+
+                    // #region xml meta tag
+                    indexDocument.xmltag = String(dr["fullcontent"]).indexOf("<header>") !== -1 ? Common.GetMetaTag(String(dr["fullcontent"])) : "";
+                    // #endregion
+
+                    indexDocument.fullcontent = fullContent.trim().replace("</document>", `<div id='xmlmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></document>`)
+                        .replace("</html>", `<div id='htmmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></html>`)
+                        .concat("<div id='nodata' style='display:none;'>", indexDocument.searchboosttext, "</div>");
+
+                    // #endregion
+                    indexDocument.documentdate = String(dr["documentdate"]).split('^')[0];
+                    indexDocument.formatteddocumentdate = new Date(`${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}`);
+                    //if (!string.IsNullOrEmpty(indexDocument.heading.Trim()))
+                    //{
+                    //    string[] headings = indexDocument.heading.IndexOf('|') != -1 ? indexDocument.heading.Split('|') : new string[] { indexDocument.heading };
+                    //    foreach (string subhead in headings)
+                    //    {
+                    //        if (!string.IsNullOrEmpty(subhead))
+                    //            objSuggest.Add(subhead.Trim());
+                    //    }
+                    //}
+                    indexDocument.Suggest = objSuggest;
+                    indexDocument.created_date = new Date(String(dr["created_date"]).substring(0, 19).replace("T", " "));
+                    const formatteddate = indexDocument.documentdate !== '' ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}` : '1900-01-01';
+                    indexDocument.updated_date = new Date(String(dr["UpdatedDate"]).substring(0, 19).replace("T", " "));
+                    indexDocument.displaydocumentdatestring = indexDocument.documentdate.trim() !== '19000101' ? indexDocument.documentdate : '';
+
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date();
+                    indexDocument.lastQCDate = new Date();
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+
+                    const filteredCategory: any = [];
+                    let isGSTCategory = false;
+                    if (indexDocument && indexDocument.categories)
+                        for (const objCategory of indexDocument.categories) {
+                            const isRequiredCategory = objCategory.id === "111050000000018392" || objCategory.id === "111050000000018393" || objCategory.id === "111050000000018400";
+                            if (objCategory.name) objCategory.name = objCategory.name.replace(/centax /gi, "").replace("Centax ", "");
+                            if (isRequiredCategory) {
+                                filteredCategory.push(objCategory);
+                            }
+                            if (objCategory && objCategory.name && objCategory.name.toLowerCase() === "gst") {
+                                isGSTCategory = true;
+                            }
+                        }
+                    indexDocument.categories = filteredCategory;
+
+
+                    //if (indexDocument.groups.group.name.toLowerCase() === "notification" && !isGSTCategory) {
+                    //    indexDocument.heading = "Notification No. " + indexDocument.heading;
+                    //}
+
+                    indexDocumentList.push(indexDocument);
+                    // console.log("log end for actid:" + dr["mid"]);
+                    // WriteLog.InsertLogMsg("log end for actid:" + dr["mid"]);
+
+                } catch (ex) {
+                    console.error(ex); console.error(ex);
+
+                    // Log additional information if needed (assuming dr["mid"] is defined)
+                    console.error("mid =", dr["mid"]);
+
+                    // You can also display a custom error message along with the mid
+                    console.error("error:", dr["mid"], ex.message);
+
+                    // Handle any specific error handling or cleanup logic if required
+
+                    // Log the error ID (assuming Common.LogErrorId function is defined)
+                    Common.LogErrorId(dr["mid"].toString());
+                }
+            }
+            console.log("Document Batch No completed:", i);
+
+            let status = "";
+            // if (indexType === 1) {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            // } else {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            // }
+        }
+    }
+    return reccount;
+}
+
+
+
 // }
