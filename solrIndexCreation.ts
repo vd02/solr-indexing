@@ -5246,19 +5246,655 @@ async function ArticleIndex(dt: any, docType: number, templateid: string): Promi
 
 
 
-                    //start from citation
+                    //#region citation
+
+                    let objCitations: Citation[] = [];
+                    let searchCitation: FormattedCitation[] = [];
+
+                    if (dr["citation"]?.toString().indexOf('$') !== -1) {
+                        const citationInfoes = !!dr["citation"] ? dr["citation"].toString().split('$') : null;
+                        if (citationInfoes !== null) {
+                            for (const citationInfo of citationInfoes) {
+                                const objFormattedCitation: FormattedCitation = {};
+                                const objYear: citationinfo = {} as citationinfo;
+                                const objJournal: citationinfo = {} as citationinfo;
+                                const objVolume: citationinfo = {} as citationinfo;
+                                const objPage: citationinfo = {} as citationinfo;
+
+                                const yearJournalVolumePage = !!citationInfo ? citationInfo.split('|') : null;
+                                if (!!yearJournalVolumePage?.[0]) {
+                                    objYear.id = yearJournalVolumePage[0];
+                                    objYear.name = yearJournalVolumePage[0];
+                                    objYear.shortName = yearJournalVolumePage[0];
+                                    objYear.ordering = yearJournalVolumePage[0];
+                                    objYear.type = "year";
+                                    objYear.url = Common.GetUrl(objYear.name);
+                                }
+
+                                if (!!yearJournalVolumePage?.[1]) {
+                                    const idName = yearJournalVolumePage[1].split('^');
+                                    objJournal.id = idName[0];
+                                    objJournal.name = idName[1];
+                                    objJournal.shortName = idName[1];
+                                    objJournal.ordering = idName[1].toLowerCase();
+                                    objJournal.type = "journal";
+                                    objJournal.url = Common.GetUrl(objJournal.name);
+                                }
+
+                                if (!!yearJournalVolumePage?.[2]) {
+                                    objVolume.id = yearJournalVolumePage[2];
+                                    objVolume.name = !!yearJournalVolumePage[2] ? parseInt(yearJournalVolumePage[2].trim(), 10).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                                    objVolume.shortName = yearJournalVolumePage[2];
+                                    objVolume.ordering = yearJournalVolumePage[2];
+                                    objVolume.type = "volume";
+                                    objVolume.url = Common.GetUrl(objVolume.name);
+                                }
+
+                                if (!!yearJournalVolumePage?.[3]) {
+                                    objPage.id = yearJournalVolumePage[3];
+                                    objPage.name = !!yearJournalVolumePage[3] ? yearJournalVolumePage[3].trim().padStart(7, '0') : Common.getRepeat("?", 7);
+                                    objPage.shortName = yearJournalVolumePage[3];
+                                    objPage.ordering = yearJournalVolumePage[3];
+                                    objPage.type = "page";
+                                    objPage.url = Common.GetUrl(objPage.name);
+                                }
+
+                                searchCitation.push({ name: objYear.name + objJournal.id + objVolume.name + objPage.name });
+                                objCitations.push({ year: objYear, journal: objJournal, volume: objVolume, pageno: objPage });
+                            }
+                        }
+                    } else {
+                        const objCitation: Citation = {} as Citation;
+                        const objYear: citationinfo = {} as citationinfo;
+                        const objJournal: citationinfo = {} as citationinfo;
+                        const objVolume: citationinfo = {} as citationinfo;
+                        const objPage: citationinfo = {} as citationinfo;
+                        const objFormattedCitation: FormattedCitation = {};
+
+                        const yearJournalVolumePage = !!dr["citation"] ? dr["citation"].toString().split('|') : null;
+                        if (yearJournalVolumePage !== null) {
+                            if (!!yearJournalVolumePage?.[0]) {
+                                objYear.id = yearJournalVolumePage[0];
+                                objYear.name = yearJournalVolumePage[0];
+                                objYear.shortName = yearJournalVolumePage[0];
+                                objYear.ordering = yearJournalVolumePage[0];
+                                objYear.type = "year";
+                                objYear.url = Common.GetUrl(objYear.name);
+                            }
+
+                            if (!!yearJournalVolumePage?.[1]) {
+                                const idName = yearJournalVolumePage[1].split('^');
+                                objJournal.id = idName[0];
+                                objJournal.name = idName[1];
+                                objJournal.shortName = idName[1];
+                                objJournal.ordering = idName[1].toLowerCase();
+                                objJournal.type = "journal";
+                                objJournal.url = Common.GetUrl(objJournal.name);
+                            }
+
+                            if (!!yearJournalVolumePage?.[2]) {
+                                objVolume.id = yearJournalVolumePage[2];
+                                objVolume.name = !!yearJournalVolumePage[2] ? parseInt(yearJournalVolumePage[2].trim(), 10).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                                objVolume.shortName = yearJournalVolumePage[2];
+                                objVolume.ordering = yearJournalVolumePage[2];
+                                objVolume.type = "volume";
+                                objVolume.url = Common.GetUrl(objVolume.name);
+                            }
+
+                            if (!!yearJournalVolumePage?.[3]) {
+                                objPage.id = yearJournalVolumePage[3];
+                                objPage.name = !!yearJournalVolumePage[3] ? yearJournalVolumePage[3].trim().padStart(7, '0') : Common.getRepeat("?", 7);
+                                objPage.shortName = yearJournalVolumePage[3];
+                                objPage.ordering = yearJournalVolumePage[3];
+                                objPage.type = "page";
+                                objPage.url = Common.GetUrl(objPage.name);
+                            }
+
+                            searchCitation.push({ name: objYear.name + objJournal.id + objVolume.name + objPage.name });
+                            objCitations.push({ year: objYear, journal: objJournal, volume: objVolume, pageno: objPage });
+                        }
+                    }
+
+                    objMasters.citations = objCitations;
+                    indexDocument.masterinfo = objMasters;
+
+                    const objSearchCit: SearchCitation = {} as SearchCitation;
+                    objSearchCit.formattedcitation = searchCitation;
+                    indexDocument.searchcitation = objSearchCit;
+
+                    //#endregion
+
+                    //#region OtherInfo Addition
+                    const objOtherInfos: Otherinfo = {} as Otherinfo;
+                    const objFullCitations: otherinfo[] = [];
+                    const objSimilarFullCitations: otherinfo[] = [];
+
+                    if (!!dr["fullcitation"]) {
+                        const fullcitation: string = dr["fullcitation"].toString().trimEnd('|').replace('|', '/');
+                        const objFullCitation: otherinfo = {
+                            id: "",
+                            name: fullcitation,
+                            shortName: "",
+                            type: "fullcitation",
+                        };
+                        if (!!objFullCitation.name && objFullCitation.name[0] === '/') {
+                            objFullCitation.name = objFullCitation.name.substring(1);
+                        }
+                        objFullCitations.push(objFullCitation);
+
+                        // similar full citation
+                        let objSimilarFullCitation: otherinfo = {
+                            id: "",
+                            name: objFullCitation.name,
+                            shortName: "",
+                            type: "similarfullcitation",
+                        };
+                        objSimilarFullCitations.push(objSimilarFullCitation);
+
+                        // original name without brackets
+                        objSimilarFullCitation = {
+                            id: "",
+                            name: objFullCitation.name.replace(/[\[\]\(\)]/g, ''),
+                            shortName: "",
+                            type: "similarfullcitation",
+                        };
+                        objSimilarFullCitations.push(objSimilarFullCitation);
+
+                        // original name without brackets and full stop
+                        objSimilarFullCitation = {
+                            id: "",
+                            name: objFullCitation.name.replace(/[\[\]\(\)\.]/g, ''),
+                            shortName: "",
+                            type: "similarfullcitation",
+                        };
+                        objSimilarFullCitations.push(objSimilarFullCitation);
+
+                        // original name without brackets and full stop replaced by space
+                        objSimilarFullCitation = {
+                            id: "",
+                            name: objFullCitation.name.replace(/[\[\]\(\)\.]/g, ' '),
+                            shortName: "",
+                            type: "similarfullcitation",
+                        };
+                        objSimilarFullCitations.push(objSimilarFullCitation);
+
+                        const lstStrSimilarFullCit = objFullCitation.name.split(' ');
+                        const len = lstStrSimilarFullCit.length;
+                        if (lstStrSimilarFullCit[len - 1].toUpperCase().includes('A') || lstStrSimilarFullCit[len - 1].toUpperCase().includes('J')) {
+                            let SimilarFullCitation = '';
+                            lstStrSimilarFullCit[len - 1] = lstStrSimilarFullCit[len - 1].replace(/A/gi, '').replace(/J/gi, '');
+                            SimilarFullCitation = lstStrSimilarFullCit.join(' ');
+
+                            // original name
+                            objSimilarFullCitation = {
+                                id: "",
+                                name: SimilarFullCitation,
+                                shortName: "",
+                                type: "similarfullcitation",
+                            };
+                            objSimilarFullCitations.push(objSimilarFullCitation);
+
+                            // original name without brackets
+                            objSimilarFullCitation = {
+                                id: "",
+                                name: SimilarFullCitation.replace(/[\[\]\(\)]/g, ''),
+                                shortName: "",
+                                type: "similarfullcitation",
+                            };
+                            objSimilarFullCitations.push(objSimilarFullCitation);
+
+                            // original name without brackets and full stop
+                            objSimilarFullCitation = {
+                                id: "",
+                                name: SimilarFullCitation.replace(/[\[\]\(\)\.]/g, ''),
+                                shortName: "",
+                                type: "similarfullcitation",
+                            };
+                            objSimilarFullCitations.push(objSimilarFullCitation);
+
+                            // original name without brackets and full stop replaced by space
+                            objSimilarFullCitation = {
+                                id: "",
+                                name: SimilarFullCitation.replace(/[\[\]\(\)\.]/g, ' '),
+                                shortName: "",
+                                type: "similarfullcitation",
+                            };
+                            objSimilarFullCitations.push(objSimilarFullCitation);
+                        }
+
+                        const citations = !!dr["fullcitation"] ? dr["fullcitation"].toString().trimStart('|').trimEnd('|').split('|') : null;
+                        if (citations !== null) {
+                            const citationsA: string[] = [];
+                            for (const cit of citations) {
+                                if (!!cit) {
+                                    citationsA.push(cit.toLowerCase().trim());
+                                    const citationsubstring = cit.substring(cit.indexOf(' ')).toLowerCase().trim();
+                                    if (/^\d+/.test(citationsubstring)) {
+                                        citationsA.push(citationsubstring);
+                                    }
+                                }
+                            }
+                            if (citationsA.length > 0) {
+                                objSuggest.push({
+                                    Input: citationsA,
+                                    Weight: 1,
+                                });
+                            }
+                        }
+                    }
+
+                    objOtherInfos.fullcitation = objFullCitations;
+                    objOtherInfos.similarfullcitation = objSimilarFullCitations;
+                    indexDocument.otherinfo = objOtherInfos;
+                    //#endregion
+
+
+                    //#region iltinfo
+
+                    // Assuming dr is of type 'Record<string, any>'
+                    const objIltInfoes: Iltinfo[] = [];
+                    const searchIltCitation: FormattedCitation[] = [];
+
+                    if (!!dr["iltassociation"] && dr["iltassociation"].toString().indexOf('$') !== -1) {
+                        const citationInfoes = !!dr["iltassociation"].toString() ? dr["iltassociation"].toString().split('$') : null;
+                        if (citationInfoes !== null) {
+                            for (const citationInfo of citationInfoes) {
+                                const objFormattedCitation: FormattedCitation = {};
+                                const objCountry1: iltinfo = {} as iltinfo;
+                                const objCountry2: iltinfo = {} as iltinfo;
+                                const objArticle: iltinfo = {} as iltinfo;
+                                const objSubject: iltinfo = {} as iltinfo;
+                                const objSubSubject: iltinfo = {} as iltinfo;
+                                const cnty1cnty2artsub = !!citationInfo.toString() ? citationInfo.toString().split('|') : null;
+
+                                if (cnty1cnty2artsub[0]) {
+                                    objCountry1.id = cnty1cnty2artsub[0].split('^')[0];
+                                    objCountry1.name = cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[0] : cnty1cnty2artsub[0].split('^')[1];
+                                    objCountry1.shortName = "";
+                                    objCountry1.ordering = cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[1] : cnty1cnty2artsub[0].split('^')[1];
+                                    objCountry1.orderInteger = parseInt(cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[1] : "0");
+                                    objCountry1.type = "country1";
+                                    objCountry1.url = Common.GetUrl(objCountry1.name);
+                                }
+
+                                if (cnty1cnty2artsub[1]?.length > 5) {
+                                    objCountry2.id = cnty1cnty2artsub[1].split('^')[0];
+                                    objCountry2.pid = objCountry1.id;
+                                    objCountry2.name = cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[0] : cnty1cnty2artsub[1].split('^')[1];
+                                    objCountry2.shortName = "";
+                                    objCountry2.ordering = cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[1] : cnty1cnty2artsub[1].split('^')[1];
+                                    objCountry2.orderInteger = parseInt(cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[1] : "0");
+                                    objCountry2.type = "country2";
+                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                } else {
+                                    objCountry2.id = "000000000000000000";
+                                    objCountry2.pid = objCountry1.id;
+                                    objCountry2.name = "";
+                                    objCountry2.shortName = "";
+                                    objCountry2.ordering = "";
+                                    objCountry2.orderInteger = 0;
+                                    objCountry2.type = "country2";
+                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                }
+
+                                if (cnty1cnty2artsub[2]?.length > 5) {
+                                    objArticle.id = cnty1cnty2artsub[2].split('^')[0];
+                                    objArticle.name = cnty1cnty2artsub[2].indexOf("#") !== -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[0] : cnty1cnty2artsub[2].split('^')[1];
+                                    objArticle.pid = objCountry1.id + objCountry2.id;
+                                    objArticle.shortName = "";
+                                    objArticle.ordering = cnty1cnty2artsub[2].indexOf("#") !== -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[1] : "";
+                                    objArticle.type = "article";
+                                    objArticle.url = Common.GetUrl(objArticle.name);
+                                } else {
+                                    objArticle.id = "000000000000000000";
+                                    objArticle.name = "";
+                                    objArticle.pid = objCountry1.id + objCountry2.id;
+                                    objArticle.shortName = "";
+                                    objArticle.ordering = "";
+                                    objArticle.type = "article";
+                                    objArticle.url = "";
+                                }
+
+                                if (cnty1cnty2artsub[3]?.length > 5) {
+                                    objSubject.id = cnty1cnty2artsub[3].split('^')[0].indexOf('-') !== -1 ? cnty1cnty2artsub[3].split('^')[0].split('-')[0] : cnty1cnty2artsub[3].split('^')[0];
+                                    objSubject.pid = objCountry1.id + objCountry2.id;
+                                    objSubject.pSubId = cnty1cnty2artsub[3].split('^')[0].indexOf('-') !== -1 ? cnty1cnty2artsub[3].split('^')[0].split('-')[1] : "";
+                                    objSubject.name = cnty1cnty2artsub[3].split('^')[1];
+                                    objSubject.shortName = "";
+                                    objSubject.ordering = cnty1cnty2artsub[3].split('^')[1]?.toLowerCase();
+                                    objSubject.type = "subject";
+                                    objSubject.url = Common.GetUrl(objSubject.name);
+                                } else {
+                                    objSubject.id = "000000000000000000";
+                                    objSubject.name = "";
+                                    objSubject.pid = objCountry1.id + objCountry2.id;
+                                    objSubject.shortName = "";
+                                    objSubject.ordering = "";
+                                    objSubject.type = "subject";
+                                    objSubject.url = "";
+                                }
+
+                                if (cnty1cnty2artsub[4]?.length > 5) {
+                                    objSubSubject.id = cnty1cnty2artsub[4].split('^')[0];
+                                    objSubSubject.pid = objSubject.id;
+                                    objSubSubject.name = cnty1cnty2artsub[4].indexOf("#") !== -1 ? cnty1cnty2artsub[4].split('^')[1].split('#')[0] : cnty1cnty2artsub[4].split('^')[1];
+                                    objSubSubject.shortName = "";
+                                    objSubSubject.ordering = cnty1cnty2artsub[4].indexOf("#") !== -1 ? cnty1cnty2artsub[4].split('^')[1].split('#')[1] : "";
+                                    objSubSubject.type = "subsubject";
+                                    objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                                } else {
+                                    objSubSubject.id = "000000000000000000";
+                                    objSubSubject.pid = objSubject.id;
+                                    objSubSubject.name = "";
+                                    objSubSubject.shortName = "";
+                                    objSubSubject.ordering = "";
+                                    objSubSubject.type = "subsubject";
+                                    objSubSubject.url = "";
+                                }
+
+                                searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+
+                                objIltInfoes.push({
+                                    country1: objCountry1,
+                                    country2: objCountry2,
+                                    article: objArticle,
+                                    subject: objSubject,
+                                    subsubject: objSubSubject,
+                                });
+                            }
+                        }
+                    } else {
+                        const objFormattedCitation: FormattedCitation = {};
+                        const objCountry1: iltinfo = {} as iltinfo;
+                        const objCountry2: iltinfo = {} as iltinfo;
+                        const objArticle: iltinfo = {} as iltinfo;
+                        const objSubject: iltinfo = {} as iltinfo;
+                        const objSubSubject: iltinfo = {} as iltinfo;
+                        const cnty1cnty2artsub = !!dr["iltassociation"].toString() ? dr["iltassociation"].toString().split('|') : null;
+
+                        if (cnty1cnty2artsub !== null) {
+                            if (cnty1cnty2artsub[0]) {
+                                objCountry1.id = cnty1cnty2artsub[0].split('^')[0];
+                                objCountry1.name = cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[0] : cnty1cnty2artsub[0].split('^')[1];
+                                objCountry1.shortName = "";
+                                objCountry1.ordering = cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[1] : cnty1cnty2artsub[0].split('^')[1];
+                                objCountry1.orderInteger = parseInt(cnty1cnty2artsub[0].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[0].split('^')[1].split('#')[1] : "0");
+                                objCountry1.type = "country1";
+                                objCountry1.url = Common.GetUrl(objCountry1.name);
+                            }
+
+                            if (cnty1cnty2artsub[1]?.length > 5) {
+                                objCountry2.id = cnty1cnty2artsub[1].split('^')[0];
+                                objCountry2.pid = objCountry1.id;
+                                objCountry2.name = cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[0] : cnty1cnty2artsub[1].split('^')[1];
+                                objCountry2.shortName = "";
+                                objCountry2.ordering = cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[1] : cnty1cnty2artsub[1].split('^')[1];
+                                objCountry2.orderInteger = parseInt(cnty1cnty2artsub[1].split('^')[1]?.indexOf('#') !== -1 ? cnty1cnty2artsub[1].split('^')[1].split('#')[1] : "0");
+                                objCountry2.type = "country2";
+                                objCountry2.url = Common.GetUrl(objCountry2.name);
+                            } else {
+                                objCountry2.id = "";
+                                objCountry2.pid = "";
+                                objCountry2.name = "";
+                                objCountry2.shortName = "";
+                                objCountry2.ordering = "";
+                                objCountry2.orderInteger = 0;
+                                objCountry2.type = "country2";
+                                objCountry2.url = Common.GetUrl(objCountry2.name);
+                            }
+
+                            if (cnty1cnty2artsub[2]?.length > 5) {
+                                objArticle.id = cnty1cnty2artsub[2].split('^')[0];
+                                objArticle.name = cnty1cnty2artsub[2].indexOf("#") !== -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[0] : cnty1cnty2artsub[2].split('^')[1];
+                                objArticle.shortName = "";
+                                objArticle.ordering = cnty1cnty2artsub[2].indexOf("#") !== -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[1] : "";
+                                objArticle.type = "article";
+                                objArticle.url = Common.GetUrl(objArticle.name);
+                            } else {
+                                objArticle.id = "";
+                                objArticle.name = "";
+                                objArticle.shortName = "";
+                                objArticle.ordering = "";
+                                objArticle.type = "article";
+                                objArticle.url = "";
+                            }
+
+                            if (cnty1cnty2artsub[3]?.length > 5) {
+                                objSubject.id = cnty1cnty2artsub[3].split('^')[0];
+                                objSubject.pid = objCountry1.id + objCountry2.id;
+                                objSubject.name = cnty1cnty2artsub[3].indexOf("#") !== -1 ? cnty1cnty2artsub[3].split('^')[1].split('#')[0] : cnty1cnty2artsub[3].split('^')[1];
+                                objSubject.shortName = "";
+                                objSubject.ordering = cnty1cnty2artsub[3].indexOf("#") !== -1 ? cnty1cnty2artsub[3].split('^')[1].split('#')[1] : "";
+                                objSubject.type = "subject";
+                                objSubject.url = Common.GetUrl(objSubject.name);
+                            } else {
+                                objSubject.id = "";
+                                objSubject.name = "";
+                                objSubject.shortName = "";
+                                objSubject.ordering = "";
+                                objSubject.type = "subject";
+                                objSubject.url = "";
+                            }
+
+                            if (cnty1cnty2artsub[4]?.length > 5) {
+                                objSubSubject.id = cnty1cnty2artsub[4].split('^')[0];
+                                objSubSubject.pid = objSubject.id;
+                                objSubSubject.name = cnty1cnty2artsub[4].indexOf("#") !== -1 ? cnty1cnty2artsub[4].split('^')[1].split('#')[0] : cnty1cnty2artsub[4].split('^')[1];
+                                objSubSubject.shortName = "";
+                                objSubSubject.ordering = cnty1cnty2artsub[4].indexOf("#") !== -1 ? cnty1cnty2artsub[4].split('^')[1].split('#')[1] : "";
+                                objSubSubject.type = "subsubject";
+                                objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                            } else {
+                                objSubSubject.id = "";
+                                objSubSubject.name = "";
+                                objSubSubject.shortName = "";
+                                objSubSubject.ordering = "";
+                                objSubSubject.type = "subsubject";
+                                objSubSubject.url = "";
+                            }
+
+                            searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+
+                            objIltInfoes.push({
+                                country1: objCountry1,
+                                country2: objCountry2,
+                                article: objArticle,
+                                subject: objSubject,
+                                subsubject: objSubSubject,
+                            });
+                        }
+                    }
+
+                    indexDocument.masterinfo = objMasters;
+
+                    const objSearchIltCit: SearchIltCitation = {} as SearchIltCitation;
+                    objSearchIltCit.formattediltcitation = searchIltCitation;
+                    indexDocument.searchiltcitation = objSearchIltCit;
+
+                    objMasters.iltinfoes = objIltInfoes;
+
+                    //#endregion
+
+
+
+                    indexDocument.masterinfo = objMasters;
+
+
+                    class StringBuilder {
+                        private data: string[];
+
+                        constructor() {
+                            this.data = [];
+                        }
+
+                        append(text: string): void {
+                            this.data.push(text);
+                        }
+
+                        toString(): string {
+                            return this.data.join('');
+                        }
+                    }
+
+                    const taginfoArray = !!dr["TagInfo"] ? (dr["TagInfo"] as string).split('$') : null;
+                    if (taginfoArray) {
+                        const objTagInfoes: Taginfo[] = [];
+                        for (const taginfo of taginfoArray) {
+                            const tags = taginfo.split('|');
+                            if (!!tags[0]) {
+                                const tagInfo: Taginfo = {
+                                    id: tags[0].split('^')[0],
+                                    name: tags[0].split('^')[1],
+                                    validity: (!!tags[1] && tags[1] !== "0^0") ? tags[1].split('^')[0] : undefined,
+                                };
+                                objTagInfoes.push(tagInfo);
+                            }
+                        }
+                        indexDocument.taginfo = objTagInfoes;
+                    } else {
+                        indexDocument.taginfo = [{ id: "", name: "" }];
+                    }
+
+                    const markinginfoArray = !!dr["MarkingInfo"] ? (dr["MarkingInfo"] as string).split('$') : null;
+                    let topStoryHeading: string = '';
+                    let topStoryDesc: string = '';
+                    if (markinginfoArray) {
+                        const objMarkingInfoes: Markinginfo[] = [];
+                        let num: number = 0;
+
+                        for (const markinginfo of markinginfoArray) {
+                            num++;
+                            const markings = markinginfo.split('|');
+                            if (markings && markings.length > 1) {
+                                const marking1 = markings[1].replace("&#39;", "'");
+                                const markingInfo: Markinginfo = {
+                                    number: num,
+                                    text: markings[0].toLowerCase(),
+                                    image: marking1.split('^')[0],
+                                };
+                                if (num === 1) {
+                                    topStoryHeading = marking1.split('^')[1].split(new RegExp("##", "g"))[0];
+                                    topStoryDesc = marking1.split('^')[1].indexOf("##") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[0] : marking1.split('^')[1];
+                                }
+                                const pmark = marking1.indexOf("@@e") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[1] : "";
+                                const parentmark = marking1.indexOf("@@t") !== -1 ? pmark.split(new RegExp("@@t", "g")) : null;
+                                markingInfo.entrydate = marking1.split('^')[1].indexOf("##") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[0] : "";
+                                markingInfo.updateddate = marking1.split('^')[1].indexOf("##") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[0] : "";
+                                if (parentmark) {
+                                    markingInfo.parentmarking = Common.customTrimStart((parentmark[0] + ", " + parentmark[1]), ',').trim().toLowerCase();
+                                }
+                                objMarkingInfoes.push(markingInfo);
+                            }
+                        }
+
+                        indexDocument.markinginfo = objMarkingInfoes;
+                    } else {
+                        indexDocument.markinginfo = [{ number: 0, text: "", image: "", entrydate: new Date().toLocaleDateString(), updateddate: new Date().toLocaleDateString() }];
+                    }
+                    indexDocument.topstoryheading = topStoryHeading;
+                    indexDocument.topstorydesc = topStoryDesc;
+
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(`${dr["categoriescentax"]?.toString().toLowerCase()} ${dr["groups"]?.toString().toLowerCase()} ${dr["year"]?.toString().toLowerCase()} ${dr["fullcitation"]?.toString().toLowerCase()} ${Common.StringOnly(dr["actassociations"])?.toString().toLowerCase()} ${Common.StringOnly(dr["articlesubjectinfo"])?.toString().toLowerCase()} ${dr["heading"]?.toString().trim()} ${dr["subheading"]?.toString().trim()} ${authornames.join(" ")}`);
+
+                    indexDocument.shortcontent = dr["shortcontent"]?.toString().trim();
+                    //#region footnote
+                    const doc = new DOMParser().parseFromString(dr["fullcontent"], "text/html");
+                    const isHtmlFootnote = !!doc.querySelectorAll(".footprint").length;
+                    let fullContent: string = "";
+                    const footnotecontent = new StringBuilder();
+
+                    if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
+                        doc.querySelectorAll(".footprint").forEach(item => {
+                            item.remove();
+                            footnotecontent.append(item.outerHTML);
+                        });
+                        fullContent = doc.body.innerHTML;
+                    } else if (dr["fullcontent"].indexOf("<footnote>") !== -1) {
+                        const regexfootnote = "<footnote>(.*?)</footnote>";
+                        const replaceValue = "";
+                        const matchesfootnote = (dr["fullcontent"] as string).match(new RegExp(regexfootnote, "gs"));
+                        if (matchesfootnote) {
+                            matchesfootnote.forEach(matchfoot => {
+                                footnotecontent.append(matchfoot);
+                            });
+                        }
+                        fullContent = (dr["fullcontent"] as string).replace(new RegExp(regexfootnote, "gs"), "");
+                    } else {
+                        fullContent = dr["fullcontent"]?.toString();
+                    }
+                    indexDocument.footnotecontent = footnotecontent.toString();
+                    //#endregion footnote
+
+
+                    // ... (existing code)
+
+                    // Remove header tag from full content
+                    if (!!indexDocument && !!indexDocument.fullcontent && indexDocument.fullcontent.indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+
+                    // Get XML meta tag from full content
+                    if (!!indexDocument && !!indexDocument.fullcontent && indexDocument.fullcontent.indexOf("<header>") !== -1) {
+                        indexDocument.xmltag = Common.GetMetaTag(indexDocument.fullcontent);
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+
+                    // Trim and modify the full content
+                    indexDocument.fullcontent = fullContent.trim().lastIndexOf("</document>") !== -1
+                        ? fullContent.trim().replace("</document>", "<div id='xmlmetadata' style='display:none;'>" + indexDocument.searchboosttext + "</div></document>")
+                        : fullContent.lastIndexOf("</html>") !== -1
+                            ? fullContent.trim().replace("</html>", "<div id='htmmetadata' style='display:none;'>" + indexDocument.searchboosttext + "</div></html>")
+                            : fullContent.trim() + "<div id='nodata' style='display:none;'>" + indexDocument.searchboosttext + "</div>";
+
+                    indexDocument.Suggest = objSuggest;
+                    indexDocument.created_date = new Date(dr["created_date"].toString().substr(0, 4) + "-" + dr["created_date"].toString().substr(4, 2) + "-" + dr["created_date"].toString().substr(6, 2) + " " + dr["created_date"].toString().substr(8, 2) + ":" + dr["created_date"].toString().substr(10, 2) + ":" + dr["created_date"].toString().substr(12, 2) || "1900-01-01");
+                    const formatteddate = indexDocument.documentdate ? indexDocument.documentdate.substring(0, 4) + "-" + indexDocument.documentdate.substring(4, 6) + "-" + indexDocument.documentdate.substring(6, 8) : "1900-01-01";
+
+                    indexDocument.updated_date = new Date(dr["UpdatedDate"].toString().substr(0, 4) + "-" + dr["UpdatedDate"].toString().substr(4, 2) + "-" + dr["UpdatedDate"].toString().substr(6, 2) || "1900-01-01");
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date();
+                    indexDocument.lastQCDate = new Date();
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+
+                    // Filter and modify categories
+                    const filteredCategory: Category[] = [];
+                    if (!!indexDocument.categories)
+                        for (const objCategory of indexDocument.categories) {
+                            const isRequiredCategory = objCategory.id === "111050000000018392" || objCategory.id === "111050000000018393" || objCategory.id === "111050000000018400";
+                            if (!!objCategory.name) objCategory.name = objCategory.name.replace(/centax /gi, "");
+                            if (!!objCategory.name) objCategory.name = objCategory.name.replace("Centax ", "");
+                            if (isRequiredCategory) {
+                                filteredCategory.push(objCategory);
+                            }
+                        }
+                    indexDocument.categories = filteredCategory;
+
+                    indexDocumentList.push(indexDocument);
 
 
                     // ... (the rest of the code)
                 } catch (ex) {
-                    Common.LogError(ex, "mid = " + dr["mid"]);
-                    console.log("error:", dr["mid"], ex.message);
+                    Common.LogError(ex, " MID = " + dr["mid"]);
+                    console.log("error: " + dr["mid"] + ex.message);
                     Common.LogErrorId(dr["mid"].toString());
+
                 }
             }
+            console.log("Document Batch No completed: " + i + "\r\n");
+            let status: string = "";
+            // if (indexType === 1)
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            // else
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            // GC.Collect();
+
         }
     }
 }
+
 
 
 // }
