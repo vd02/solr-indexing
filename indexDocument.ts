@@ -1,7 +1,7 @@
 export interface Subcategory {
-    id: string;
-    name: string;
-    url: string;
+    id?: string;
+    name?: string;
+    url?: string;
 }
 
 export interface Category {
@@ -33,7 +33,7 @@ export interface Subsubsubgroup {
     name: string;
     url: string;
     ordering: string;
-    subsubsubsubgroup: Subsubsubgroup;
+    subsubsubsubgroup: Subsubsubsubgroup;
 }
 
 export interface Subsubsubsubgroup {
@@ -294,21 +294,21 @@ export interface Attachment {
 }
 
 export interface GenericInfo {
-    id: string;
-    pid: string;
-    catUrls: string[];
-    actsectionyearid: string;
-    type: string;
-    name: string;
-    shortName: string;
-    ordering: string;
-    orderInteger: number;
-    url: string;
-    designation: string;
-    socialSiteUrl: string;
-    imagePath: string;
-    year: string;
-    actsectionid: string;
+    id?: string;
+    pid?: string;
+    catUrls?: string[];
+    actsectionyearid?: string;
+    type?: string;
+    name?: string;
+    shortName?: string;
+    ordering?: string;
+    orderInteger?: number;
+    url?: string;
+    designation?: string;
+    socialSiteUrl?: string;
+    imagePath?: string;
+    year?: string;
+    actsectionid?: string;
 }
 
 export interface Info {

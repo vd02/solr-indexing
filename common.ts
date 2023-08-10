@@ -432,6 +432,31 @@ export class Common {
         // objupload.UploadImage(`${ConfigurationSettings.AppSettings.s3imageBucket}${destid}`, fileName, imgsrcPath);
     }
 
+    public static pdfFileManagementiReader(MID: string, FilePath: string | undefined, Type: string): string {
+        if (FilePath.toLowerCase().indexOf('.pdf') !== -1) {
+            if (Type && Type.toLowerCase() === 'instruction') {
+                MID = MID + '_' + Type + '.pdf';
+            } else {
+                MID = MID + '.pdf';
+            }
+
+            const ROOTPath: string = System.Configuration.ConfigurationManager.AppSettings['FilePath'];
+            const NEWPath: string = System.Configuration.ConfigurationManager.AppSettings['iReaderPdfPath'];
+
+            if (!fs.existsSync(NEWPath)) {
+                fs.mkdirSync(NEWPath, { recursive: true });
+            }
+
+            if (fs.existsSync(ROOTPath + FilePath)) {
+                fs.copyFileSync(ROOTPath + FilePath, NEWPath + MID);
+            }
+        } else {
+            MID = FilePath;
+        }
+
+        return MID;
+    }
+
 
 }
 
