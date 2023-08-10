@@ -8064,4 +8064,346 @@ async function AAAIndex(dt: any, docType: number, templateid: string): Promise<v
 }
 
 
+async function NewsIndex(dt: any, docType: number, templateid: string): Promise<void> {
+    let indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 5000; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+    for (let i = 0; i < totalBatches; i++) {
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().Skip(i * batchSize).Take(batchSize);
+        if (dataRows.Count() > 0) {
+            for (const dr of dataRows) {
+                //console.log("log start for actid:" + dr["mid"]+ "\r\n");
+                try {
+                    const indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = dr["mid"]?.trim();
+                    indexDocument.mid = dr["id"]?.trim();
+                    indexDocument.templateid = templateid;
+                    indexDocument.documenttype = dr["documenttype"]?.toLowerCase().trim();
+                    indexDocument.documentformat = dr["documentformat"]?.toLowerCase().trim();
+                    indexDocument.filenamepath = dr["url"]?.trim();
+                    if (dr["url"]?.toLowerCase().includes(".pdf")) {
+                        indexDocument.filenamepath = new Common.UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    }
+                    //indexDocument.filenamepath = new Common().pdfFileManagement(indexDocument.id, indexDocument.filenamepath, "");
+                    //Common.UploadLinkFilesOnS3(indexDocument.id, "news");
+                    Common.UploadLinkFilesOnS3Centax(indexDocument.mid, "news", indexDocument.documentformat, dr["url"]?.trim(), indexDocument.id);
+
+                    //#region cat subcat binding
+
+                    const catSubCatArray = (!!dr["categoriescentax"]) ? String(dr["categoriescentax"]).split('$') : null;
+                    if (catSubCatArray !== null) {
+                        const objCatList: Category[] = [];
+                        for (const catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+                                const isprimarycat = (catsubcat.split('%').length > 1) ? parseInt(catsubcat.split('%')[1]) : 0;
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname = (!!catsubcat) ? catsubcat.split('|') : null;
+                                    const mainCat = catidname?.[1].trim().split('^')[0].trim();
+                                    const isRequiredCategory = (mainCat?.includes("111050000000018392") || mainCat?.includes("111050000000018393") || mainCat?.includes("111050000000018400") || mainCat?.includes("111050000000018768") || mainCat?.includes("111050000000018769") || mainCat?.includes("111050000000018770") || mainCat?.includes("111050000000018771") || mainCat?.includes("111050000000018772") || mainCat?.includes("111050000000019031"));
+                                    if (!isRequiredCategory) {
+                                        continue;
+                                    }
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname?.[1].trim().split('^')[0].trim();
+                                            objCat.name = catidname?.[1].split('^')[1].trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname?.[0].trim().split('^')[0].trim();
+                                            objCat.name = catidname?.[0].split('^')[1].trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objSubCat.id = catidname?.[2].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname?.[2].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        default:
+                                            objSubCat.id = catidname?.[1].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname?.[1].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                            break;
+                                    }
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0].trim();
+                                    objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                    objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+                                objCatList.push(objCat);
+                            }
+                        }
+                        indexDocument.categories = objCatList;
+                    }
+                    //#endregion
+
+                    // #region Groups binding
+                    const groupSubgroupArray = !!dr["groups"] ? dr["groups"].toString().split('|') : null;
+                    if (groupSubgroupArray != null) {
+                        const objGroups: Groups = {} as Groups;
+                        const objSubGroup: Subgroup = {} as Subgroup;
+
+                        if (groupSubgroupArray.length > 1 && !!groupSubgroupArray[1]) {
+                            objSubGroup.id = groupSubgroupArray[1].split('^')[0].trim();
+                            objSubGroup.name = groupSubgroupArray[1].split('^')[1].split('#')[0].trim();
+                            objSubGroup.ordering = groupSubgroupArray[1].split('^')[1].split('#')[1].trim();
+                            objSubGroup.url = Common.GetUrl(objSubGroup?.name?.toLowerCase());
+                        }
+
+                        const objSubSubGroup: Subsubgroup = {} as Subsubgroup;
+                        if (groupSubgroupArray.length > 2 && groupSubgroupArray[2] !== "") {
+                            objSubSubGroup.id = groupSubgroupArray[2].split('^')[0].trim();
+                            objSubSubGroup.name = groupSubgroupArray[2].split('^')[1].split('#')[0].trim();
+                            objSubSubGroup.ordering = groupSubgroupArray[2].split('^')[1].split('#')[1].trim();
+                            objSubSubGroup.url = Common.GetUrl(objSubSubGroup?.name?.toLowerCase());
+                        }
+
+                        objSubGroup.subsubgroup = objSubSubGroup;
+
+                        const group: Group = {
+                            id: groupSubgroupArray[0].split('^')[0].trim(),
+                            name: docType === 3 ? "form" : groupSubgroupArray[0].split('^')[1].split('#')[0].trim(),
+                            url: docType === 3 ? "form" : Common.GetUrl(groupSubgroupArray[0].split('^')[1].split('#')[0].toLowerCase().trim()),
+                            subgroup: objSubGroup
+                        };
+
+                        objGroups.group = group;
+                        indexDocument.groups = objGroups;
+                    }
+                    // #endregion group binding
+
+                    indexDocument.heading = dr["Heading"]?.toString();
+                    indexDocument.subheading = dr["subheading"]?.toString().trim();
+                    indexDocument.sortheading = dr["sortheading"]?.toString().toLowerCase().trim();
+                    indexDocument.sortheadingnumber = dr["sortheadingnumber"]?.toString().toLowerCase().trim();
+                    indexDocument.searchheadingnumber = dr["searchheadingnumber"]?.toString().toLowerCase().trim();
+                    indexDocument.url = dr["url"]?.toString().toLowerCase().trim();
+                    indexDocument.language = dr["language"]?.toString().toLowerCase().trim();
+
+                    // #region marking info
+                    const markinginfoArray = !!dr["MarkingInfo"] ? dr["MarkingInfo"].toString().split('$') : null;
+                    let topStoryHeading = "";
+                    let topStoryDesc = "";
+
+                    if (markinginfoArray != null) {
+                        const objMarkingInfoes: Markinginfo[] = [];
+                        let num: number = 0;
+
+                        markinginfoArray.forEach(markinginfo => {
+                            num++;
+                            const markings = markinginfo.split('|');
+
+                            if (markings != null && markings.length > 1) {
+                                const marking1 = markings[1].replace("&#39;", "'");
+                                const markingInfo: Markinginfo = {} as Markinginfo;
+                                markingInfo.number = num;
+                                markingInfo.text = markings[0];
+                                markingInfo.image = marking1.split('^')[0];
+
+                                if (num === 1) {
+                                    const topStoryParts = marking1.split('^')[1].split(new RegExp("##"));
+                                    topStoryHeading = topStoryParts[0];
+                                    topStoryDesc = topStoryParts[1]?.split(new RegExp("@@i"))[0] || topStoryParts[1];
+                                }
+
+                                if (marking1.indexOf("@@e") !== -1) {
+                                    const entryUpdateParts = marking1.split('^')[1].split(new RegExp("##"))[1].split(new RegExp("@@i"))[1].split('~');
+                                    markingInfo.entrydate = entryUpdateParts[1].split('\\')[0];
+                                    markingInfo.updateddate = entryUpdateParts[1].replace('_', ' ').trim().split(new RegExp("@@e"))[0];
+                                }
+
+                                const pmark = marking1.indexOf("@@e") !== -1 ? marking1.split('^')[1].split(new RegExp("##"))[1].split(new RegExp("@@i"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e"))[1] : "";
+                                const parentmark = marking1.indexOf("@@t") !== -1 ? pmark.split(new RegExp("@@t")) : null;
+
+                                if (marking1.split('^')[1].indexOf("##") !== -1 && marking1.split('^')[1].indexOf('~') !== -1) {
+                                    markingInfo.entrydate = marking1.split('^')[1].split(new RegExp("##"))[1].split(new RegExp("@@i"))[1].split('~')[1].split('\\')[0];
+                                    markingInfo.updateddate = marking1.split('^')[1].split(new RegExp("##"))[1].split(new RegExp("@@i"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e"))[0];
+                                }
+
+                                if (parentmark != null) {
+                                    markingInfo.parentmarking = Common.customTrimStart((parentmark[0] + ", " + parentmark[1]), ',');
+                                }
+
+                                objMarkingInfoes.push(markingInfo);
+                            }
+                        });
+
+                        indexDocument.markinginfo = objMarkingInfoes;
+                    } else {
+                        indexDocument.markinginfo = [{ number: 0, text: "", image: "", entrydate: new Date().toLocaleDateString(), updateddate: new Date().toLocaleDateString() }];
+                    }
+
+                    indexDocument.topstoryheading = topStoryHeading;
+                    indexDocument.topstorydesc = topStoryDesc;
+                    // #endregion end marking info
+
+                    // #region Tagging Info
+                    const taggingInfo = !!dr["TagInfo"] ? dr["TagInfo"].toString().split('$') : null;
+                    const objTags: Taginfo[] = [];
+
+                    if (taggingInfo != null && taggingInfo.length > 0) {
+                        for (const taginfo of taggingInfo) {
+                            const taginfos = !!taginfo ? taginfo.toString().split('|') : null;
+                            if (!!taginfo) {
+                                const objtaginfo: Taginfo = {} as Taginfo;
+                                objtaginfo.id = taginfos[1].split('^')[0];
+                                objtaginfo.name = taginfos[1].split('^')[1];
+                                objTags.push(objtaginfo);
+                            }
+                        }
+                    } else {
+                        const taginfos = !!dr["TagInfo"] ? dr["TagInfo"].toString().split('|') : null;
+                        if (taginfos != null) {
+                            const objtaginfo: Taginfo = {} as Taginfo;
+                            objtaginfo.id = taginfos[1].split('^')[0];
+                            objtaginfo.name = taginfos[1].split('^')[1];
+                            objTags.push(objtaginfo);
+                        }
+                    }
+
+                    indexDocument.taginfo = objTags;
+                    // #endregion Tagging info end
+
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(`${dr["categoriescentax"].toString().toLowerCase()} ${dr["groups"].toString().toLowerCase()} ${dr["Heading"].toString().trim()} ${dr["subheading"].toString().trim()}`);
+                    indexDocument.shortcontent = dr["shortcontent"].toString().trim();
+
+                    // #region footnote region
+                    let fullContent = "";
+                    let footnotecontent = "";
+
+                    const dom = new JSDOM(dr["fullcontent"].toString());
+
+                    const isHtmlFootnote = dom.window.document.querySelectorAll('.footprint').length > 0;
+
+                    if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
+                        const footprintDivs = dom.window.document.querySelectorAll('.footprint');
+                        footprintDivs.forEach(item => {
+                            item.remove();
+                            footnotecontent += item.outerHTML;
+                        });
+                        fullContent = dom.window.document.body.innerHTML;
+                    } else if (dr["fullcontent"].toString().indexOf("<footnote>") !== -1) {
+                        const regexfootnote = /<footnote>(.*?)<\/footnote>/g;
+                        const matchesfootnote = dr["fullcontent"].toString().match(regexfootnote);
+
+                        if (matchesfootnote) {
+                            matchesfootnote.forEach(matchfoot => {
+                                footnotecontent += matchfoot;
+                            });
+                        }
+
+                        fullContent = dr["fullcontent"].toString().replace(regexfootnote, "");
+                    } else {
+                        fullContent = dr["fullcontent"].toString();
+                    }
+
+                    indexDocument.footnotecontent = footnotecontent;
+                    // #endregion footnote
+                    // ...
+
+                    // #region remove header tag from full content
+                    if (dr["fullcontent"].toString().indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    // #endregion
+
+                    // #region xml meta tag
+                    if (dr["fullcontent"].toString().indexOf("<header>") !== -1) {
+                        indexDocument.xmltag = Common.GetMetaTag(dr["fullcontent"].toString());
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    // #endregion
+
+                    indexDocument.fullcontent = fullContent.trim().lastIndexOf("</document>") !== -1
+                        ? fullContent.trim().replace("</document>", `<div id='xmlmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></document>`)
+                        : fullContent.lastIndexOf("</html>") !== -1
+                            ? fullContent.trim().replace("</html>", `<div id='htmmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></html>`)
+                            : fullContent.trim() + `<div id='nodata' style='display:none;'>${indexDocument.searchboosttext}</div>`;
+
+                    indexDocument.documentdate = dr["documentdate"].toString().split('^')[0];
+                    indexDocument.formatteddocumentdate = new Date(!!indexDocument.documentdate ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}` : "1900-01-01");
+                    indexDocument.created_date = new Date(!!dr["created_date"].toString() ? `${dr["created_date"].toString().substring(0, 4)}-${dr["created_date"].toString().substring(4, 2)}-${dr["created_date"].toString().substring(6, 2)} ${dr["created_date"].toString().substring(8, 2)}:${dr["created_date"].toString().substring(10, 2)}:${dr["created_date"].toString().substring(12, 2)}` : "1900-01-01");
+                    const formatteddate = !!indexDocument.documentdate ? indexDocument.documentdate.toString() : "1900-01-01";
+                    indexDocument.updated_date = new Date(!!dr["UpdatedDate"].toString() ? `${dr["UpdatedDate"].toString().substring(0, 4)}-${dr["UpdatedDate"].toString().substring(4, 2)}-${dr["UpdatedDate"].toString().substring(6, 2)} ${dr["UpdatedDate"].toString().substring(8, 2)}:${dr["UpdatedDate"].toString().substring(10, 2)}:${dr["UpdatedDate"].toString().substring(12, 2)}` : "1900-01-01");
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date();
+                    indexDocument.lastQCDate = new Date();
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+                    indexDocumentList.push(indexDocument);
+
+                    // ...
+
+                } catch (ex) {
+                    // Handle error
+                    Common.LogError(ex, "mid = " + dr["mid"]);
+                    console.log("error:" + dr["mid"] + ex.message);
+                    Common.LogErrorId(dr["mid"].toString());
+                }
+            }
+            console.log(`Document Batch No completed: ${i}`);
+
+            let status = "";
+            // if (indexType === 1) {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            // } else {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            // }
+        }
+    }
+}
+
+
 // }
