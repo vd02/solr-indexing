@@ -1,7 +1,8 @@
 import { Common } from './common';
 import { Constants } from './constants';
-import { Associate, Associates, Category, CompletionField, GenericInfo, IndexDocument, Info, Masterinfo, Subcategory, casections, ca2013section, Groups, Subgroup, Group, Citation, FormattedCitation, citationinfo, SearchCitation, Otherinfo, otherinfo, SearchIltCitation, Iltinfo, iltinfo, Taginfo, Markinginfo, Headnote } from './indexDocument';
-
+import { Associate, Associates, Category, CompletionField, GenericInfo, IndexDocument, Info, Masterinfo, Subcategory, casections, ca2013section, Groups, Subgroup, Group, Citation, FormattedCitation, citationinfo, SearchCitation, Otherinfo, otherinfo, SearchIltCitation, Iltinfo, iltinfo, Taginfo, Markinginfo, Headnote, Subsubgroup, Subsubsubgroup } from './indexDocument';
+const jsdom = require("jsdom");
+const { JSDOM } = jsdom;
 
 // class ElasticIndexCreation {
 const indexDocumentList: IndexDocument[] = {} as IndexDocument[];
@@ -886,12 +887,18 @@ async function ActRuleIndex(dt: any, docType: number, templateid: string): Promi
     //GC.Collect();
 }
 
-async function CaseLawsIndex(dt: any, docType: number, templateid: string): Promise<number> {
+export async function CaseLawsIndex(dt: any, docType: number, templateid: string): Promise<number> {
     const indexDocumentList: IndexDocument[] = [];
     const batchSize = 100; // magic
+    dt = dt?.Tables[0].Rows;
+    console.log('dt ki length: ' + dt.length);
+    console.log('')
+    // console.log('dt:' + dt)
     const totalBatches = Math.ceil(dt.length / batchSize);
     console.log("Total Document Batch Started:" + totalBatches);
     let reccount = 0;
+
+    // console.log(dt);
 
     for (let i = 0; i < totalBatches; i++) {
         console.log("Document Batch No started:" + i);
@@ -906,17 +913,19 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                 // Use try-catch block for error handling
                 try {
+                    // console.log(dr['CaseAutoID']);
                     const indexDocument: IndexDocument = {} as IndexDocument;
-                    indexDocument.id = dr['mid'].toString().trim();
-                    indexDocument.mid = dr['id'].toString().trim();
-                    indexDocument.excusdocid = dr['excusdocid'].toString().trim();
+                    indexDocument.id = dr?.['mid']?.toString().trim();
+                    indexDocument.mid = dr?.['id']?.toString().trim();
+                    console.log(indexDocument?.id, indexDocument?.mid)
+                    indexDocument.excusdocid = dr?.['excusdocid']?.toString().trim();
                     indexDocument.templateid = templateid;
-                    indexDocument.documenttype = dr['documenttype'].toString().toLowerCase().trim();
-                    indexDocument.documentformat = dr['documentformat'].toString().toLowerCase().trim();
-                    indexDocument.filenamepath = dr['url'].toString().trim();
-
+                    indexDocument.documenttype = dr?.['documenttype']?.toString()?.toLowerCase().trim();
+                    indexDocument.documentformat = dr?.['documentformat']?.toString()?.toLowerCase().trim();
+                    indexDocument.filenamepath = dr?.['url']?.toString().trim();
+                    console.log('-----1');
                     // Check if the filenamepath is a PDF and upload to Amazon S3
-                    if (dr['url'].toString().toLowerCase().indexOf('.pdf') !== -1) {
+                    if (dr?.['url']?.toString()?.toLowerCase()?.indexOf('.pdf') !== -1) {
                         // Use the equivalent TypeScript code for the UploadPdfFilesOnAmazonS3Bucket method.
                         // indexDocument.filenamepath = /* Your TypeScript method call here */;
                     }
@@ -929,10 +938,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         /* Common.UploadImageOnAmazonS3BucketCentax(...) */
                     } catch (ex) {
                         // Handle the error
-                        console.error('S3 upload error for MID = ' + dr['mid'], ex);
+                        console.error('S3 upload error for MID = ' + dr?.['mid'], ex);
                     }
 
-                    const year: string = dr['year'].toString().trim();
+                    const year: string = dr?.['year']?.toString()?.trim();
                     if (year !== '') {
                         indexDocument.year = { id: year, name: year };
                     }
@@ -942,11 +951,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objAssociates: Associates = {} as Associates;
 
                     const caseSubjectArray: string[] | null = dr['CaseSubject']
-                        ? dr['CaseSubject'].toString().split('$')
+                        ? dr?.['CaseSubject']?.toString()?.split('$')
                         : null;
 
                     const objsubjects: GenericInfo[] = [];
-
+                    console.log('-----2');
                     //#region subject-master
                     if (caseSubjectArray !== null && caseSubjectArray.length > 1) {
                         for (const association of caseSubjectArray) {
@@ -954,7 +963,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                             if (associations !== null && associations.length > 1) {
                                 const objSubject: GenericInfo = {} as GenericInfo;
-                                const type: string = associations[0] !== '' ? associations[1].split('^')[0].toLowerCase() : '';
+                                const type: string = associations[0] !== '' ? associations[1].split('^')[0]?.toLowerCase() : '';
 
                                 if (type.trim() === 'subject') {
                                     if (typeof associations[0] === 'string' && associations[0].trim() !== '') {
@@ -964,7 +973,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objSubject.shortName = '';
                                         objSubject.ordering = associations[1].split('^')[1].split('~')[1];
                                         objSubject.orderInteger = 0;
-                                        objSubject.url = Common.GetUrl(objSubject.name.toLowerCase());
+                                        objSubject.url = Common.GetUrl(objSubject.name?.toLowerCase());
 
                                         // Assuming objSubject.catUrls is a property of the GenericInfo class
                                         // Update this part accordingly based on the implementation of the GenericInfo class.
@@ -974,7 +983,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                                         if (!!objSubject.name.trim()) {
                                             objSuggest.push({
-                                                Input: [objSubject.name.toLowerCase().trim()],
+                                                Input: [objSubject.name?.toLowerCase().trim()],
                                                 Weight: 18,
                                             });
                                         }
@@ -984,10 +993,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         }
                     }
                     //#endregion subject-master
-
+                    console.log('-----3');
                     //#region cat-subcat-binding
                     const catSubCatArray: string[] = dr["categoriescentax"]
-                        ? dr["categoriescentax"].toString().split("$")
+                        ? dr["categoriescentax"]?.toString().split("$")
                         : null;
 
 
@@ -1012,7 +1021,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         mainCat.includes("111050000000018393") ||
                                         mainCat.includes("111050000000018400");
 
-                                    mainCat = mainCat.replace(/centax /gi, "");
+                                    mainCat = mainCat?.replace(/centax /gi, "");
 
                                     if (!isRequiredCategory) continue;
 
@@ -1021,7 +1030,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         case Constants.companyCategoryId:
                                             objCat.id = catidname?.[1].trim().split("^")[0].trim();
                                             objCat.name = catidname?.[1].split("^")[1].trim().split("%")[0];
-                                            if (objCat && objCat?.name) { objCat.url = Common.GetUrl(objCat.name.toLowerCase()); }
+                                            if (objCat && objCat?.name) { objCat.url = Common.GetUrl(objCat.name?.toLowerCase()); }
                                             objCat.isprimarycat = isprimarycat;
                                             break;
                                         case Constants.competitionCategoryId:
@@ -1033,20 +1042,20 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         case Constants.tpCategoryId:
                                             objCat.id = Constants.tpCategoryId;
                                             objCat.name = Constants.tpCategory;
-                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
                                             objCat.isprimarycat = isprimarycat;
                                             break;
                                         case Constants.iltCategoryId:
                                             objCat.id = Constants.iltCategoryId;
                                             objCat.name = Constants.iltCategory;
-                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
                                             objCat.isprimarycat = isprimarycat;
                                             break;
                                         default:
                                             if (catidname && catidname[0]) {
                                                 objCat.id = catidname[0].trim().split("^")[0].trim();
                                                 objCat.name = catidname[0].split("^")[1].trim().split("%")[0];
-                                                objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                                objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
                                             }
                                             objCat.isprimarycat = isprimarycat;
                                             break;
@@ -1057,27 +1066,27 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         case Constants.companyCategoryId:
                                             objSubCat.id = catidname[2].trim().split("^")[0].trim();
                                             objSubCat.name = catidname[2].split("^")[1].trim().split("%")[0];
-                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
                                             break;
                                         case Constants.competitionCategoryId:
                                             objSubCat.id = Constants.competitionCategoryId;
                                             objSubCat.name = Constants.competitionCategory;
-                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
                                             break;
                                         case Constants.tpCategoryId:
                                             objSubCat.id = Constants.tpCategoryId;
                                             objSubCat.name = Constants.tpCategory;
-                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
                                             break;
                                         case Constants.iltCategoryId:
                                             objSubCat.id = Constants.iltCategoryId;
                                             objSubCat.name = Constants.iltCategory;
-                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
                                             break;
                                         default:
                                             objSubCat.id = catidname[1].trim().split("^")[0].trim();
                                             objSubCat.name = catidname[1].split("^")[1].trim().split("%")[0];
-                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
                                             break;
                                     }
 
@@ -1085,7 +1094,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 } else {
                                     objCat.id = catsubcat.split("^")[0].trim();
                                     objCat.name = catsubcat.split("^")[1].trim().split("%")[0];
-                                    objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
                                     objCat.isprimarycat = isprimarycat;
 
                                     objSubCat.id = "";
@@ -1100,7 +1109,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     //#endregion
-
+                    console.log('-----4');
                     //#region act-associations
                     const associationArray: string[] | null = dr["actassociations"]
                         ? (dr["actassociations"] as string).split('$')
@@ -1122,9 +1131,9 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 const objSectionAssociate: Associate = {} as Associate;
 
                                 const actidsecid = associations[0].indexOf('#') !== -1 ? associations[0].trim().split('#') : null;
-                                const type = associations[1] !== "" ? associations[1].split('^')[0].toLowerCase() : "";
+                                const type = associations[1] !== "" ? associations[1].split('^')[0]?.toLowerCase() : "";
 
-                                if (type.toLowerCase().trim() === "act") {
+                                if (type?.toLowerCase().trim() === "act") {
                                     if (Common.CasePopularActsfinal().hasOwnProperty(associations[0].trim())) {
                                         const categories = Common.CasePopularActsfinal()[associations[0].trim()][1].split(',');
                                         objAct.id = objActAssociate.id = associations[0].trim();
@@ -1134,7 +1143,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objAct.ordering = associations[1].split('^')[1].split('~')[1];
                                         objAct.orderInteger = 0;
                                         objActAssociate.associatedDocid = "";
-                                        objAct.url = objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+                                        objAct.url = objActAssociate.url = Common.GetUrl(objActAssociate.name?.toLowerCase());
                                         objAct.catUrls = categories;
                                     } else {
                                         const categories = Common.OtherActs()["999999999999999999"][1].split(',');
@@ -1144,19 +1153,19 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objAct.shortName = "";
                                         objAct.ordering = "999999999";
                                         objAct.orderInteger = 0;
-                                        objAct.url = Common.GetUrl(objAct.name.toLowerCase());
+                                        objAct.url = Common.GetUrl(objAct.name?.toLowerCase());
                                         objAct.catUrls = categories;
                                         objActAssociate.id = associations[0].trim();
                                         objActAssociate.type = type;
                                         objActAssociate.name = associations[1] !== "" ? associations[1].split('^')[1].split('~')[0] : "";
                                         objActAssociate.ordering = associations[1].split('^')[1].split('~')[1];
                                         objActAssociate.associatedDocid = "";
-                                        objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+                                        objActAssociate.url = Common.GetUrl(objActAssociate.name?.toLowerCase());
                                     }
 
                                     if (objAct.name.trim() !== "") {
                                         objSuggest.push({
-                                            Input: [objAct.name.toLowerCase().trim()],
+                                            Input: [objAct.name?.toLowerCase().trim()],
                                             Weight: 20,
                                         });
                                     }
@@ -1181,10 +1190,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                             for (const parentsection of parentsectioininfo) {
                                                 if (parentsection.indexOf(actidsecid[1].trim()) !== -1) {
                                                     const parentsectionidname = parentsection.substring(parentsection.indexOf('#')).split('|');
-                                                    objSectionAssociate.id = parentsectionidname[0].replace('#', ' ').trim();
-                                                    objSectionAssociate.name = parentsectionidname[1].replace('^', '-').split('~')[0];
-                                                    objSectionAssociate.ordering = parentsectionidname[1].replace('^', '-').split('~')[1];
-                                                    objSectionAssociate.actsectionid = actidsecid[0].trim() + parentsectionidname[0].replace('#', ' ').trim();
+                                                    objSectionAssociate.id = parentsectionidname[0]?.replace('#', ' ').trim();
+                                                    objSectionAssociate.name = parentsectionidname[1]?.replace('^', '-').split('~')[0];
+                                                    objSectionAssociate.ordering = parentsectionidname[1]?.replace('^', '-').split('~')[1];
+                                                    objSectionAssociate.actsectionid = actidsecid[0].trim() + parentsectionidname[0]?.replace('#', ' ').trim();
                                                     isparentsection = true;
                                                 }
                                             }
@@ -1202,7 +1211,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                                 objSection.shortName = "";
                                                 objSection.ordering = section.indexOf('~') !== -1 ? section.split('~')[1] : "";
                                                 objSection.orderInteger = 0;
-                                                objSection.url = Common.GetUrl(objSection.name.toLowerCase());
+                                                objSection.url = Common.GetUrl(objSection.name?.toLowerCase());
 
                                                 if (!isparentsection) {
                                                     objSectionAssociate.id = actidsecid[1];
@@ -1213,7 +1222,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                                                 objSectionAssociate.type = type;
                                                 objSectionAssociate.associatedDocid = actidsecid[0];
-                                                objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+                                                objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name?.toLowerCase());
                                             } else {
                                                 if (sectionName) {
                                                     if (!isparentsection) {
@@ -1225,12 +1234,12 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                                                     objSectionAssociate.type = type;
                                                     objSectionAssociate.associatedDocid = actidsecid[0];
-                                                    objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+                                                    objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name?.toLowerCase());
                                                 }
                                             }
 
                                             if (objSection.name.trim() !== "") {
-                                                sections.push(objSection.name.toLowerCase().trim());
+                                                sections.push(objSection.name?.toLowerCase().trim());
                                             }
 
                                             objSections.push(objSection);
@@ -1263,9 +1272,9 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                                 if (ca1956actsection) {
                                     obj1956section.id = ca1956actsection[2].trim();
-                                    obj1956section.name = ca1956actsection[3].trim().replace(' ', '-');
+                                    obj1956section.name = ca1956actsection[3].trim()?.replace(' ', '-');
                                     obj1956section.actname = "Companies Act, 1956";
-                                    obj1956section.url = Common.GetUrl(obj1956section.name.toLowerCase());
+                                    obj1956section.url = Common.GetUrl(obj1956section.name?.toLowerCase());
                                 }
 
                                 const obj2013sections: ca2013section[] = [];
@@ -1276,9 +1285,9 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                     if (actsection.indexOf("102010000000000793") !== -1) {
                                         const obj2013section: ca2013section = {} as ca2013section;
                                         obj2013section.id = actsections[2].trim();
-                                        obj2013section.name = actsections[3].trim().replace(' ', '-');
+                                        obj2013section.name = actsections[3].trim()?.replace(' ', '-');
                                         obj2013section.actname = "Companies Act, 2013";
-                                        obj2013section.url = Common.GetUrl(obj2013section.name.toLowerCase());
+                                        obj2013section.url = Common.GetUrl(obj2013section.name?.toLowerCase());
                                         obj2013sections.push(obj2013section);
                                     }
                                 }
@@ -1297,10 +1306,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     objMasterInfo.subject = objsubjects;
                     objMasters.info = objMasterInfo;
                     //#endregion
-
+                    console.log('-----5');
                     //#region article-subject-binding
                     const objSubjectAssociations: Associate[] = [];
-                    const associatesStr = dr["associates"].toString();
+                    const associatesStr = dr["associates"]?.toString();
 
                     if (!!associatesStr && associatesStr.indexOf('$') !== -1) {
                         const associatesList = associatesStr.split('$');
@@ -1342,10 +1351,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                     objAssociates.subject = objSubjectAssociations;
                     //#endregion
-
+                    console.log('-----6');
                     //#region rule associations
-                    const ruleAssociationArray = (dr["DDA_Rules"] !== null && dr["DDA_Rules"] !== undefined && dr["DDA_Rules"].toString() !== "")
-                        ? dr["DDA_Rules"].toString().split('$')
+                    const ruleAssociationArray = (dr["DDA_Rules"] !== null && dr["DDA_Rules"] !== undefined && dr["DDA_Rules"]?.toString() !== "")
+                        ? dr["DDA_Rules"]?.toString().split('$')
                         : null;
 
                     if (ruleAssociationArray !== null && ruleAssociationArray.length > 1) {
@@ -1359,19 +1368,19 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 const objRuleAssociate: Associate = {} as Associate;
                                 const objRulenoAssociate: Associate = {} as Associate;
 
-                                const ruleidrulenoid = (associations[0].toString().indexOf('#') !== -1)
-                                    ? associations[0].toString().trim().split('#')
+                                const ruleidrulenoid = (associations[0]?.toString().indexOf('#') !== -1)
+                                    ? associations[0]?.toString().trim().split('#')
                                     : null;
 
-                                const type = (associations[0] !== "") ? associations[1].split('^')[0].toLowerCase() : "";
+                                const type = (associations[0] !== "") ? associations[1].split('^')[0]?.toLowerCase() : "";
 
-                                if (type.toLowerCase().trim() === "rule") {
+                                if (type?.toLowerCase().trim() === "rule") {
                                     if (associations[0] !== "") {
                                         objRuleAssociate.id = associations[0].trim();
                                         objRuleAssociate.type = type;
                                         objRuleAssociate.name = (associations[1] !== "") ? associations[1].split('^')[1] : "";
                                         objRuleAssociate.associatedDocid = "";
-                                        objRuleAssociate.url = Common.GetUrl(objRuleAssociate.name.toLowerCase());
+                                        objRuleAssociate.url = Common.GetUrl(objRuleAssociate.name?.toLowerCase());
                                         objRuleAssociations.push(objRuleAssociate);
                                     }
                                 } else {
@@ -1387,7 +1396,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objRulenoAssociate.type = type;
                                         objRulenoAssociate.name = ruleno;
                                         objRulenoAssociate.associatedDocid = ruleidrulenoid[0];
-                                        objRulenoAssociate.url = Common.GetUrl(objRulenoAssociate.name.toLowerCase());
+                                        objRulenoAssociate.url = Common.GetUrl(objRulenoAssociate.name?.toLowerCase());
                                         objRuleNoAssociations.push(objRulenoAssociate);
                                     }
                                 }
@@ -1399,11 +1408,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     //#endregion
-
+                    console.log('-----7');
                     //#region case referred associations 
 
-                    const casereferredAssociation = (dr["casereferred"] !== null && dr["casereferred"] !== undefined && dr["casereferred"].toString() !== "")
-                        ? dr["casereferred"].toString().split('$')
+                    const casereferredAssociation = (dr["casereferred"] !== null && dr["casereferred"] !== undefined && dr["casereferred"]?.toString() !== "")
+                        ? dr["casereferred"]?.toString().split('$')
                         : null;
 
                     if (casereferredAssociation !== null && casereferredAssociation.length > 1) {
@@ -1415,11 +1424,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             if (associations !== null && associations.length > 1) {
                                 const objCaseRefAssociate: Associate = {} as Associate; // Initialize as an empty object of type Associate
 
-                                const idtype = (associations[0].toString().indexOf('|') !== -1)
-                                    ? associations[0].toString().trim().split('|')
+                                const idtype = (associations[0]?.toString().indexOf('|') !== -1)
+                                    ? associations[0]?.toString().trim().split('|')
                                     : null;
 
-                                const namedate = (associations[1].toString().indexOf('#') !== -1)
+                                const namedate = (associations[1]?.toString().indexOf('#') !== -1)
                                     ? associations[1].split('#')
                                     : null;
 
@@ -1440,7 +1449,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         : "";
 
                                     if (!!indexDocument && !!indexDocument?.mid) objCaseRefAssociate.associatedDocid = indexDocument.mid;
-                                    objCaseRefAssociate.url = Common.GetUrl(objCaseRefAssociate.name.toLowerCase());
+                                    objCaseRefAssociate.url = Common.GetUrl(objCaseRefAssociate.name?.toLowerCase());
                                     objCaseReferredAssociations.push(objCaseRefAssociate);
                                 }
                             }
@@ -1451,11 +1460,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
 
                     //#endregion
-
+                    console.log('-----8');
                     //#region case referred associations
 
                     const affirmreverseAssociation = (!!(dr["arinfo"]))
-                        ? dr["arinfo"].toString().split('$')
+                        ? dr["arinfo"]?.toString().split('$')
                         : null;
 
                     if (affirmreverseAssociation !== null && affirmreverseAssociation.length > 1) {
@@ -1503,7 +1512,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         ? (namedate[1].indexOf('@') !== -1 ? namedate[1].split('@')[1].split('~')[1] : "")
                                         : "";
 
-                                    objaffirmReverseAssociate.url = Common.GetUrl(objaffirmReverseAssociate.name.toLowerCase());
+                                    objaffirmReverseAssociate.url = Common.GetUrl(objaffirmReverseAssociate.name?.toLowerCase());
                                     objaffirmreverseAssociations.push(objaffirmReverseAssociate);
                                 }
                             }
@@ -1513,11 +1522,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     //#endregion
-
+                    console.log('-----10');
                     //#region case referred associations
 
-                    const slpAssociation = (dr["slpinfo"] !== null && dr["slpinfo"] !== undefined && dr["slpinfo"].toString() !== "")
-                        ? dr["slpinfo"].toString().split('$')
+                    const slpAssociation = (dr["slpinfo"] !== null && dr["slpinfo"] !== undefined && dr["slpinfo"]?.toString() !== "")
+                        ? dr["slpinfo"]?.toString().split('$')
                         : null;
 
                     if (slpAssociation !== null && slpAssociation.length > 1) {
@@ -1543,7 +1552,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                     objslpAssociate.name = (nameSubheading[0] !== "") ? nameSubheading[0] : "";
                                     objslpAssociate.subheading = (nameSubheading[1] !== "") ? nameSubheading[1] : "";
                                     objslpAssociate.associatedDocid = affirmCaseIds[1];
-                                    objslpAssociate.url = Common.GetUrl(objslpAssociate.name.toLowerCase());
+                                    objslpAssociate.url = Common.GetUrl(objslpAssociate.name?.toLowerCase());
                                     slpAssociations.push(objslpAssociate);
                                 }
                             }
@@ -1554,11 +1563,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
 
                     //#endregion
-
+                    console.log('----11');
                     //#region cirnot association
 
-                    const cirnotAssociation = (dr["DDA_CirNot"] !== null && dr["DDA_CirNot"] !== undefined && dr["DDA_CirNot"].toString().trim() !== "")
-                        ? dr["DDA_CirNot"].toString().split('$')
+                    const cirnotAssociation = (dr["DDA_CirNot"] !== null && dr["DDA_CirNot"] !== undefined && dr["DDA_CirNot"]?.toString().trim() !== "")
+                        ? dr["DDA_CirNot"]?.toString().split('$')
                         : null;
 
 
@@ -1571,7 +1580,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             const associations = association.split('|');
                             if (associations !== null && associations.length > 1) {
                                 objcirnotAssociate.id = associations[0].trim();
-                                objcirnotAssociate.type = associations[1].split('^')[0].trim().toLowerCase();
+                                objcirnotAssociate.type = associations[1].split('^')[0].trim()?.toLowerCase();
                                 objcirnotAssociate.name = associations[1].split('^')[1].trim();
                                 objcirnotAssociate.date = associations[1].split('^')[2].trim();
                                 objcirnotAssociate.subheading = associations[1].split('^')[3].trim();
@@ -1584,10 +1593,10 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                     indexDocument.associates = objAssociates;
                     //#endregion
-
+                    console.log('----12');
                     //#region Groups Section
-                    const groupsArray = (dr["groups"] !== null && dr["groups"] !== undefined && dr["groups"].toString().trim() !== "")
-                        ? dr["groups"].toString().replace('|', ' ').trim().split('^')
+                    const groupsArray = (dr["groups"] !== null && dr["groups"] !== undefined && dr["groups"]?.toString().trim() !== "")
+                        ? dr["groups"]?.toString()?.replace('|', ' ').trim().split('^')
                         : null;
 
 
@@ -1596,7 +1605,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         objGroups.group = {
                             id: groupsArray[0].split('^')[0].trim(),
                             name: groupsArray[1].trim(),
-                            url: Common.GetUrl(groupsArray[1].toLowerCase().trim()),
+                            url: Common.GetUrl(groupsArray[1]?.toLowerCase().trim()),
                             subgroup: {
                                 id: "",
                                 name: "",
@@ -1620,7 +1629,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objSortByCitation: FormattedCitation = {} as FormattedCitation;
 
                     const yearJournalVolumePageMaster = (!!dr["MasterCitationOrder"])
-                        ? dr["MasterCitationOrder"].toString().split('|')
+                        ? dr["MasterCitationOrder"]?.toString().split('|')
                         : null;
 
                     if (yearJournalVolumePageMaster !== null) {
@@ -1638,7 +1647,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objJournalsort.id = idName[0];
                             objJournalsort.name = idName[1];
                             objJournalsort.shortName = idName[1];
-                            objJournalsort.ordering = idName[1].toLowerCase();
+                            objJournalsort.ordering = idName[1]?.toLowerCase();
                             objJournalsort.type = "journal";
                             objJournalsort.url = Common.GetUrl(objJournalsort.name);
                             // objCitation.journal = objJournalsort;
@@ -1646,7 +1655,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         if (yearJournalVolumePageMaster[2] !== null) {
                             objVolumesort.id = yearJournalVolumePageMaster[2];
                             objVolumesort.name = (!!yearJournalVolumePageMaster[2])
-                                ? parseInt(yearJournalVolumePageMaster[2].trim(), 10).toString().padStart(4, '0')
+                                ? parseInt(yearJournalVolumePageMaster[2].trim(), 10)?.toString().padStart(4, '0')
                                 : Common.getRepeat("?", 4);
                             objVolumesort.shortName = yearJournalVolumePageMaster[2];
                             objVolumesort.ordering = yearJournalVolumePageMaster[2];
@@ -1685,7 +1694,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objSortByCitationcentax: FormattedCitation = {} as FormattedCitation;
 
                     const yearJournalVolumePageMastercentax = (!!dr["MasterCitationOrderCentax"])
-                        ? dr["MasterCitationOrderCentax"].toString().split('|')
+                        ? dr["MasterCitationOrderCentax"]?.toString().split('|')
                         : null;
 
                     if (yearJournalVolumePageMastercentax !== null) {
@@ -1703,7 +1712,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objJournalsortcentax.id = idName[0];
                             objJournalsortcentax.name = idName[1];
                             objJournalsortcentax.shortName = idName[1];
-                            objJournalsortcentax.ordering = idName[1].toLowerCase();
+                            objJournalsortcentax.ordering = idName[1]?.toLowerCase();
                             objJournalsortcentax.type = "journal";
                             objJournalsortcentax.url = Common.GetUrl(objJournalsort.name);
                             //objCitationsortcentax.journal = objJournalsort;
@@ -1711,7 +1720,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         if (yearJournalVolumePageMastercentax[2] !== null) {
                             objVolumesortcentax.id = yearJournalVolumePageMastercentax[2];
                             objVolumesortcentax.name = (!yearJournalVolumePageMastercentax[2])
-                                ? Number(yearJournalVolumePageMastercentax[2].trim()).toString().padStart(4, '0')
+                                ? Number(yearJournalVolumePageMastercentax[2].trim())?.toString().padStart(4, '0')
                                 : Common.getRepeat("?", 4);
                             objVolumesortcentax.shortName = yearJournalVolumePageMastercentax[2];
                             objVolumesortcentax.ordering = yearJournalVolumePageMastercentax[2];
@@ -1748,8 +1757,8 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objPagesortcentaxelt: citationinfo = {} as citationinfo;
                     const objSortByCitationcentaxelt: FormattedCitation = {} as FormattedCitation;
 
-                    const yearJournalVolumePageMastercentaxelt: string[] | null = dr["MasterCitationOrderCentaxElt"] !== null && dr["MasterCitationOrderCentaxElt"] !== undefined && dr["MasterCitationOrderCentaxElt"].toString() !== ""
-                        ? dr["MasterCitationOrderCentaxElt"].toString().split('|')
+                    const yearJournalVolumePageMastercentaxelt: string[] | null = dr["MasterCitationOrderCentaxElt"] !== null && dr["MasterCitationOrderCentaxElt"] !== undefined && dr["MasterCitationOrderCentaxElt"]?.toString() !== ""
+                        ? dr["MasterCitationOrderCentaxElt"]?.toString().split('|')
                         : null;
 
                     if (yearJournalVolumePageMastercentaxelt !== null) {
@@ -1767,14 +1776,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objJournalsortcentaxelt.id = idName[0];
                             objJournalsortcentaxelt.name = idName[1];
                             objJournalsortcentaxelt.shortName = idName[1];
-                            objJournalsortcentaxelt.ordering = idName[1].toLowerCase();
+                            objJournalsortcentaxelt.ordering = idName[1]?.toLowerCase();
                             objJournalsortcentaxelt.type = "journal";
                             objJournalsortcentaxelt.url = Common.GetUrl(objJournalsortcentaxelt.name);
                         }
 
                         if (yearJournalVolumePageMastercentaxelt[2] !== null) {
                             objVolumesortcentaxelt.id = yearJournalVolumePageMastercentaxelt[2];
-                            objVolumesortcentaxelt.name = yearJournalVolumePageMastercentaxelt[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxelt[2].trim()).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                            objVolumesortcentaxelt.name = yearJournalVolumePageMastercentaxelt[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxelt[2].trim())?.toString().padStart(4, '0') : Common.getRepeat("?", 4);
                             objVolumesortcentaxelt.shortName = yearJournalVolumePageMastercentaxelt[2];
                             objVolumesortcentaxelt.ordering = yearJournalVolumePageMastercentaxelt[2];
                             objVolumesortcentaxelt.type = "volume";
@@ -1807,8 +1816,8 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objPagesortcentaxgstl: citationinfo = {} as citationinfo;
                     const objSortByCitationcentaxgstl: FormattedCitation = {} as FormattedCitation;
 
-                    const yearJournalVolumePageMastercentaxgstl: string[] | null = dr["MasterCitationOrderCentaxGstl"] !== null && dr["MasterCitationOrderCentaxGstl"] !== undefined && dr["MasterCitationOrderCentaxGstl"].toString() !== ""
-                        ? dr["MasterCitationOrderCentaxGstl"].toString().split('|')
+                    const yearJournalVolumePageMastercentaxgstl: string[] | null = dr["MasterCitationOrderCentaxGstl"] !== null && dr["MasterCitationOrderCentaxGstl"] !== undefined && dr["MasterCitationOrderCentaxGstl"]?.toString() !== ""
+                        ? dr["MasterCitationOrderCentaxGstl"]?.toString().split('|')
                         : null;
 
                     if (yearJournalVolumePageMastercentaxgstl !== null) {
@@ -1826,14 +1835,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objJournalsortcentaxgstl.id = idName[0];
                             objJournalsortcentaxgstl.name = idName[1];
                             objJournalsortcentaxgstl.shortName = idName[1];
-                            objJournalsortcentaxgstl.ordering = idName[1].toLowerCase();
+                            objJournalsortcentaxgstl.ordering = idName[1]?.toLowerCase();
                             objJournalsortcentaxgstl.type = "journal";
                             objJournalsortcentaxgstl.url = Common.GetUrl(objJournalsortcentaxgstl.name);
                         }
 
                         if (yearJournalVolumePageMastercentaxgstl[2] !== null) {
                             objVolumesortcentaxgstl.id = yearJournalVolumePageMastercentaxgstl[2];
-                            objVolumesortcentaxgstl.name = yearJournalVolumePageMastercentaxgstl[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxgstl[2].trim()).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                            objVolumesortcentaxgstl.name = yearJournalVolumePageMastercentaxgstl[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxgstl[2].trim())?.toString().padStart(4, '0') : Common.getRepeat("?", 4);
                             objVolumesortcentaxgstl.shortName = yearJournalVolumePageMastercentaxgstl[2];
                             objVolumesortcentaxgstl.ordering = yearJournalVolumePageMastercentaxgstl[2];
                             objVolumesortcentaxgstl.type = "volume";
@@ -1866,8 +1875,8 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objPagesortcentaxstr: citationinfo = {} as citationinfo;
                     const objSortByCitationcentaxstr: FormattedCitation = {} as FormattedCitation;
 
-                    const yearJournalVolumePageMastercentaxstr: string[] | null = dr["MasterCitationOrderCentaxStr"] !== null && dr["MasterCitationOrderCentaxStr"] !== undefined && dr["MasterCitationOrderCentaxStr"].toString() !== ""
-                        ? dr["MasterCitationOrderCentaxStr"].toString().split('|')
+                    const yearJournalVolumePageMastercentaxstr: string[] | null = dr["MasterCitationOrderCentaxStr"] !== null && dr["MasterCitationOrderCentaxStr"] !== undefined && dr["MasterCitationOrderCentaxStr"]?.toString() !== ""
+                        ? dr["MasterCitationOrderCentaxStr"]?.toString().split('|')
                         : null;
 
                     if (yearJournalVolumePageMastercentaxstr !== null) {
@@ -1885,14 +1894,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objJournalsortcentaxstr.id = idName[0];
                             objJournalsortcentaxstr.name = idName[1];
                             objJournalsortcentaxstr.shortName = idName[1];
-                            objJournalsortcentaxstr.ordering = idName[1].toLowerCase();
+                            objJournalsortcentaxstr.ordering = idName[1]?.toLowerCase();
                             objJournalsortcentaxstr.type = "journal";
                             objJournalsortcentaxstr.url = Common.GetUrl(objJournalsort.name);
                         }
 
                         if (yearJournalVolumePageMastercentaxstr[2] !== null) {
                             objVolumesortcentaxstr.id = yearJournalVolumePageMastercentaxstr[2];
-                            objVolumesortcentaxstr.name = yearJournalVolumePageMastercentaxstr[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxstr[2].trim()).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                            objVolumesortcentaxstr.name = yearJournalVolumePageMastercentaxstr[2].trim() !== "" ? Number(yearJournalVolumePageMastercentaxstr[2].trim())?.toString().padStart(4, '0') : Common.getRepeat("?", 4);
                             objVolumesortcentaxstr.shortName = yearJournalVolumePageMastercentaxstr[2];
                             objVolumesortcentaxstr.ordering = yearJournalVolumePageMastercentaxstr[2];
                             objVolumesortcentaxstr.type = "volume";
@@ -1915,26 +1924,26 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     //#endregion
-
+                    console.log('----13');
                     indexDocument.companyactinfo = obj1956sections;
-                    indexDocument.documentdate = !!dr["documentdate"].toString().split('^')[0] ? dr["documentdate"].toString().split('^')[0] : "19000101";
+                    indexDocument.documentdate = !!dr["documentdate"]?.toString().split('^')[0] ? dr["documentdate"]?.toString().split('^')[0] : "19000101";
                     indexDocument.formatteddocumentdate = new Date(!!indexDocument.documentdate ? indexDocument.documentdate.substring(0, 4) + "-" + indexDocument.documentdate.substring(4, 2) + "-" + indexDocument.documentdate.substring(6, 2) : "1900-01-01");
                     indexDocument.displaydocumentdatestring = !!indexDocument.documentdate && indexDocument.documentdate.trim() !== "19000101" ? indexDocument.documentdate : "";
-                    indexDocument.heading = !!indexDocument.documentdate && indexDocument.documentdate.trim() !== "19000101" ? `${dr["heading"].toString().trim()}[${dr["documentdate"].toString().split('^')[1]}]` : dr["heading"].toString().trim();
-                    indexDocument.subheading = dr["subheading"].toString().trim();
-                    indexDocument.sortheading = dr["sortheading"].toString().toLowerCase().trim();
-                    indexDocument.sortbycourt = dr["sortbycourt"].toString().toLowerCase().trim();
-                    indexDocument.sortbyname = dr["sortbyname"].toString().toLowerCase().trim();
-                    indexDocument.sortbyauthor = dr["sortbyauthor"].toString().toLowerCase().trim();
+                    indexDocument.heading = !!indexDocument.documentdate && indexDocument.documentdate.trim() !== "19000101" ? `${dr["heading"]?.toString().trim()}[${dr["documentdate"]?.toString().split('^')[1]}]` : dr["heading"]?.toString().trim();
+                    indexDocument.subheading = dr["subheading"]?.toString().trim();
+                    indexDocument.sortheading = dr["sortheading"]?.toString()?.toLowerCase().trim();
+                    indexDocument.sortbycourt = dr["sortbycourt"]?.toString()?.toLowerCase().trim();
+                    indexDocument.sortbyname = dr["sortbyname"]?.toString()?.toLowerCase().trim();
+                    indexDocument.sortbyauthor = dr["sortbyauthor"]?.toString()?.toLowerCase().trim();
                     indexDocument.sortbycitation = objYearsort.name + objJournalsort.id + objVolumesort.name + objPagesort.name;
                     indexDocument.sortbycitationcentax = objYearsortcentax.name + objJournalsortcentax.id + objVolumesortcentax.name + objPagesortcentax.name;
                     indexDocument.sortbycitationcentaxelt = objYearsortcentaxelt.name + objJournalsortcentaxelt.id + objVolumesortcentaxelt.name + objPagesortcentaxelt.name;
                     indexDocument.sortbycitationcentaxgstl = objYearsortcentaxgstl.name + objJournalsortcentaxgstl.id + objVolumesortcentaxgstl.name + objPagesortcentaxgstl.name;
                     indexDocument.sortbycitationcentaxstr = objYearsortcentaxstr.name + objJournalsortcentaxstr.id + objVolumesortcentaxstr.name + objPagesortcentaxstr.name;
                     indexDocument.sortheadingnumber = "";
-                    indexDocument.searchheadingnumber = Common.RemoveSpecialCharacterWithSpace(dr["searchheadingnumber"].toString().toLowerCase().trim());
+                    indexDocument.searchheadingnumber = Common.RemoveSpecialCharacterWithSpace(dr["searchheadingnumber"]?.toString()?.toLowerCase().trim());
                     indexDocument.parentheadings = [{ id: "", name: "", ordering: "" }];
-                    indexDocument.url = dr["url"].toString().toLowerCase().trim();
+                    indexDocument.url = dr["url"]?.toString()?.toLowerCase().trim();
                     indexDocument.language = "";
 
                     //#region Master Info 
@@ -2030,11 +2039,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objCourtinfo.shortName = String(courtInfo[1]).trim();
                             objCourtinfo.name = String(courtInfo[2]).trim();
                             objCourtinfo.ordering = String(courtInfo[3]).trim();
-                            objCourtinfo.url = Common.GetUrl(objCourtinfo.name.toLowerCase());
+                            objCourtinfo.url = Common.GetUrl(objCourtinfo.name?.toLowerCase());
                             objCourtInfoes.push(objCourtinfo);
                             if (!objCourtinfo.name.trim()) {
                                 objSuggest.push({
-                                    Input: [objCourtinfo.name.toLowerCase().trim()],
+                                    Input: [objCourtinfo.name?.toLowerCase().trim()],
                                     Weight: 12
                                 });
                             }
@@ -2051,11 +2060,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objBenchinfo.shortName = String(benchInfo[1]).trim();
                             objBenchinfo.name = String(benchInfo[2]).trim();
                             objBenchinfo.ordering = "";
-                            objBenchinfo.url = Common.GetUrl(objBenchinfo.name.toLowerCase());
+                            objBenchinfo.url = Common.GetUrl(objBenchinfo.name?.toLowerCase());
                             objBenchinfoes.push(objBenchinfo);
                             if (!objBenchinfo.name.trim()) {
                                 objSuggest.push({
-                                    Input: [objBenchinfo.name.toLowerCase().trim()],
+                                    Input: [objBenchinfo.name?.toLowerCase().trim()],
                                     Weight: 10
                                 });
                             }
@@ -2072,11 +2081,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objBenchTypeinfo.shortName = benchTypeInfo[1] !== null ? String(benchTypeInfo[1]).trim() : "";
                             objBenchTypeinfo.name = benchTypeInfo[2] !== null ? String(benchTypeInfo[2]).trim() : "";
                             objBenchTypeinfo.ordering = "";
-                            objBenchTypeinfo.url = Common.GetUrl(objBenchTypeinfo.name.toLowerCase());
+                            objBenchTypeinfo.url = Common.GetUrl(objBenchTypeinfo.name?.toLowerCase());
                             benchTypeInfoes.push(objBenchTypeinfo);
                             if (!objBenchTypeinfo.name.trim()) {
                                 objSuggest.push({
-                                    Input: [objBenchTypeinfo.name.toLowerCase().trim()],
+                                    Input: [objBenchTypeinfo.name?.toLowerCase().trim()],
                                     Weight: 1
                                 });
                             }
@@ -2095,7 +2104,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objInfavinfoes.push(objInfavOf);
                             if (!objInfavOf.name.trim()) {
                                 objSuggest.push({
-                                    Input: [objInfavOf.name.toLowerCase().trim()],
+                                    Input: [objInfavOf.name?.toLowerCase().trim()],
                                     Weight: 1
                                 });
                             }
@@ -2103,7 +2112,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     let objServices: GenericInfo[] = [];
-                    const serviceinfo: string[] = String(dr["ServiceInfo"]).replace("$|", " ").split('|');
+                    const serviceinfo: string[] = String(dr["ServiceInfo"])?.replace("$|", " ").split('|');
                     if (serviceinfo && serviceinfo.length > 1) {
                         if (!!serviceinfo[0]) {
                             let objserviceinfo: GenericInfo = {} as GenericInfo;
@@ -2111,12 +2120,12 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objserviceinfo.type = "service";
                             objserviceinfo.shortName = String(serviceinfo[2]).trim();
                             objserviceinfo.name = String(serviceinfo[2]).trim();
-                            objserviceinfo.ordering = objserviceinfo.name.toLowerCase();
+                            objserviceinfo.ordering = objserviceinfo.name?.toLowerCase();
                             objserviceinfo.orderInteger = parseInt(serviceinfo[3]);
-                            objserviceinfo.url = Common.GetUrl(objserviceinfo.name.toLowerCase());
+                            objserviceinfo.url = Common.GetUrl(objserviceinfo.name?.toLowerCase());
                             objServices.push(objserviceinfo);
                             //if (!objserviceinfo.name.trim()) {
-                            //  objSuggest.push(objserviceinfo.name.toLowerCase().trim());
+                            //  objSuggest.push(objserviceinfo.name?.toLowerCase().trim());
                             //}
                         }
                     }
@@ -2129,33 +2138,33 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             if (!!asindas) {
                                 const asindasinfo: string[] = asindas.split('^');
                                 const type: string = asindasinfo[0].split('|')[1].trim();
-                                if (type !== "" && type.toLowerCase() === "account standard") {
+                                if (type !== "" && type?.toLowerCase() === "account standard") {
                                     if (!!asindasinfo[0].split('|')[0]) {
                                         let objasinfo: GenericInfo = {} as GenericInfo;
                                         objasinfo.id = asindasinfo[0].split('|')[0].trim();
                                         objasinfo.type = "accountingstandard";
                                         objasinfo.name = asindasinfo[1].split('#')[0].trim();
                                         objasinfo.shortName = objasinfo.name.split(':')[0].trim();
-                                        objasinfo.ordering = objasinfo.shortName.toLowerCase();
+                                        objasinfo.ordering = objasinfo.shortName?.toLowerCase();
                                         objasinfo.orderInteger = parseInt(asindasinfo[1].split('#')[1].split('~')[0].trim(), 10);
                                         objasinfo.year = asindasinfo[1].split('#')[1].split('~')[1].trim();
-                                        objasinfo.url = Common.GetUrl(objasinfo.shortName.toLowerCase());
+                                        objasinfo.url = Common.GetUrl(objasinfo.shortName?.toLowerCase());
                                         objasinfoes.push(objasinfo);
                                         //if (!objasinfo.name.trim()) {
                                         //  objSuggest.push(objasinfo.name.trim());
                                         //}
                                     }
-                                } else if (type !== "" && type.toLowerCase() === "ind as") {
+                                } else if (type !== "" && type?.toLowerCase() === "ind as") {
                                     if (!!asindasinfo[0].split('|')[0]) {
                                         let objindasinfo: GenericInfo = {} as GenericInfo;
                                         objindasinfo.id = asindasinfo[0].split('|')[0].trim();
                                         objindasinfo.type = "indas";
                                         objindasinfo.name = asindasinfo[1].split('#')[0].trim();
                                         objindasinfo.shortName = objindasinfo.name.split(':')[0].trim();
-                                        objindasinfo.ordering = objindasinfo.shortName.toLowerCase();
+                                        objindasinfo.ordering = objindasinfo.shortName?.toLowerCase();
                                         objindasinfo.orderInteger = parseInt(asindasinfo[1].split('#')[1].split('~')[0].trim(), 10);
                                         objindasinfo.year = asindasinfo[1].split('#')[1].split('~')[1].trim();
-                                        objindasinfo.url = Common.GetUrl(objindasinfo.shortName.toLowerCase());
+                                        objindasinfo.url = Common.GetUrl(objindasinfo.shortName?.toLowerCase());
                                         objindasinfoes.push(objindasinfo);
                                         //if (!objindasinfo.name.trim()) {
                                         //  objSuggest.push(objindasinfo.name.trim());
@@ -2175,7 +2184,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objCitations: Citation[] = [];
                     const searchCitation: FormattedCitation[] = [];
 
-                    const citationString: string = dr["citation"].toString();
+                    const citationString: string = dr["citation"]?.toString();
                     if (citationString.includes('$')) {
                         const citationInfoes: string[] | null = citationString.split('$');
                         if (citationInfoes) {
@@ -2201,14 +2210,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                     objJournal.id = idName[0];
                                     objJournal.name = idName[1];
                                     objJournal.shortName = idName[1];
-                                    objJournal.ordering = idName[1].toLowerCase();
+                                    objJournal.ordering = idName[1]?.toLowerCase();
                                     objJournal.type = "journal";
                                     objJournal.url = Common.GetUrl(objJournal.name);
                                 }
 
                                 if (yearJournalVolumePage[2]) {
                                     objVolume.id = yearJournalVolumePage[2];
-                                    objVolume.name = yearJournalVolumePage[2].trim() ? parseInt(yearJournalVolumePage[2].trim(), 10).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                                    objVolume.name = yearJournalVolumePage[2].trim() ? parseInt(yearJournalVolumePage[2].trim(), 10)?.toString().padStart(4, '0') : Common.getRepeat("?", 4);
                                     objVolume.shortName = yearJournalVolumePage[2];
                                     objVolume.ordering = yearJournalVolumePage[2];
                                     objVolume.type = "volume";
@@ -2253,14 +2262,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objJournal.id = idName[0];
                                 objJournal.name = idName[1];
                                 objJournal.shortName = idName[1];
-                                objJournal.ordering = idName[1].toLowerCase();
+                                objJournal.ordering = idName[1]?.toLowerCase();
                                 objJournal.type = "journal";
                                 objJournal.url = Common.GetUrl(objJournal.name);
                             }
 
                             if (yearJournalVolumePage[2]) {
                                 objVolume.id = yearJournalVolumePage[2];
-                                objVolume.name = yearJournalVolumePage[2].trim() ? parseInt(yearJournalVolumePage[2].trim(), 10).toString().padStart(4, '0') : Common.getRepeat("?", 4);
+                                objVolume.name = yearJournalVolumePage[2].trim() ? parseInt(yearJournalVolumePage[2].trim(), 10)?.toString().padStart(4, '0') : Common.getRepeat("?", 4);
                                 objVolume.shortName = yearJournalVolumePage[2];
                                 objVolume.ordering = yearJournalVolumePage[2];
                                 objVolume.type = "volume";
@@ -2287,7 +2296,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                     if (searchCitation.length > 0) {
                         const item = searchCitation[searchCitation.length - 1]?.name;
-                        if (!!item) indexDocument.sortheadingnumber = item.toString();
+                        if (!!item) indexDocument.sortheadingnumber = item?.toString();
                     }
 
                     const objSearchCit: SearchCitation = { formattedcitation: searchCitation } as SearchCitation;
@@ -2307,11 +2316,11 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const objAsstYrs: otherinfo[] = [];
                     const objParties: otherinfo[] = [];
 
-                    if (!!dr["fullcitation"].toString()) {
-                        let fullcitation: string = dr["fullcitation"].toString().trimEnd('|').replace('|', '/');
+                    if (!!dr["fullcitation"]?.toString()) {
+                        let fullcitation: string = dr["fullcitation"]?.toString().trimEnd('|')?.replace('|', '/');
                         const objFullCitation: otherinfo = {} as otherinfo;
                         objFullCitation.id = "";
-                        objFullCitation.name = fullcitation + " [" + dr["documentdate"].toString().split('^')[1] + "]";
+                        objFullCitation.name = fullcitation + " [" + dr["documentdate"]?.toString().split('^')[1] + "]";
                         objFullCitation.shortName = "";
                         objFullCitation.type = "fullcitation";
 
@@ -2329,8 +2338,8 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     let countries: string[] = [];
                     let articles: string[] = [];
 
-                    if (dr["iltassociation"].toString().indexOf('$') != -1) {
-                        let citationInfoes: string[] | null = dr["iltassociation"] ? dr["iltassociation"].toString().split('$') : null;
+                    if (dr["iltassociation"]?.toString().indexOf('$') != -1) {
+                        let citationInfoes: string[] | null = dr["iltassociation"] ? dr["iltassociation"]?.toString().split('$') : null;
                         if (citationInfoes) {
                             for (let citationInfo of citationInfoes) {
                                 let objFormattedCitation: FormattedCitation = { name: "" };
@@ -2350,7 +2359,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                     objCountry1.type = "country1";
                                     objCountry1.url = Common.GetUrl(objCountry1.name);
                                     if (objCountry1.name.trim() !== "")
-                                        countries.push(objCountry1.name.toLowerCase().trim());
+                                        countries.push(objCountry1.name?.toLowerCase().trim());
                                 }
                                 if (cnty1cnty2artsub && cnty1cnty2artsub[1]) {
                                     if (cnty1cnty2artsub[1].length > 5) {
@@ -2373,13 +2382,13 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objCountry2.url = Common.GetUrl(objCountry2.name);
                                     }
                                     if (objCountry2.name.trim() !== "")
-                                        countries.push(objCountry2.name.toLowerCase().trim());
+                                        countries.push(objCountry2.name?.toLowerCase().trim());
                                 }
                                 if (cnty1cnty2artsub && cnty1cnty2artsub[2]) {
                                     if (cnty1cnty2artsub[2].length > 5) {
                                         objArticle.id = cnty1cnty2artsub[2].split('^')[0];
                                         objArticle.name = cnty1cnty2artsub[2].indexOf("#") != -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[0] : cnty1cnty2artsub[2].split('^')[1];
-                                        objArticle.pid = objCountry1.id + objCountry2.id;
+                                        if (!!objCountry1.id) objArticle.pid = objCountry1.id + objCountry2.id;
                                         objArticle.shortName = "";
                                         objArticle.ordering = cnty1cnty2artsub[2].indexOf("#") != -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[1] : "";
                                         objArticle.type = "article";
@@ -2393,16 +2402,16 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objArticle.url = "";
                                     }
                                     if (objArticle.name.trim() !== "")
-                                        articles.push(objArticle.name.toLowerCase().trim());
+                                        articles.push(objArticle.name?.toLowerCase().trim());
                                 }
                                 if (cnty1cnty2artsub && cnty1cnty2artsub[3]) {
                                     if (cnty1cnty2artsub[3].length > 5) {
                                         objSubject.id = cnty1cnty2artsub[3].split('^')[0].indexOf('-') != -1 ? cnty1cnty2artsub[3].split('^')[0].split('-')[0] : cnty1cnty2artsub[3].split('^')[0];
-                                        objSubject.pid = objCountry1.id + objCountry2.id;
+                                        if (!!objCountry1.id) objSubject.pid = objCountry1.id + objCountry2.id;
                                         objSubject.pSubId = cnty1cnty2artsub[3].split('^')[0].indexOf('-') != -1 ? cnty1cnty2artsub[3].split('^')[0].split('-')[1] : "";
                                         objSubject.name = cnty1cnty2artsub[3].split('^')[1];
                                         objSubject.shortName = "";
-                                        objSubject.ordering = cnty1cnty2artsub[3].split('^')[1].toLowerCase();
+                                        objSubject.ordering = cnty1cnty2artsub[3].split('^')[1]?.toLowerCase();
                                         objSubject.type = "subject";
                                         objSubject.url = Common.GetUrl(objSubject.name);
                                     } else {
@@ -2414,7 +2423,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objSubject.url = "";
                                     }
                                     if (objSubject.name.trim() !== "")
-                                        subjectArray.push(objSubject.name.toLowerCase().trim());
+                                        subjectArray.push(objSubject.name?.toLowerCase().trim());
                                 }
                                 if (cnty1cnty2artsub && cnty1cnty2artsub[4]) {
                                     if (cnty1cnty2artsub[4].length > 5) {
@@ -2422,14 +2431,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                         objSubSubject.pid = objSubject.id;
                                         objSubSubject.name = cnty1cnty2artsub[4].split('^')[1];
                                         objSubSubject.shortName = "";
-                                        objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1].toLowerCase();
+                                        objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1]?.toLowerCase();
                                         objSubSubject.type = "subsubject";
                                         objSubSubject.url = Common.GetUrl(objSubSubject.name);
                                     }
-                                    if (objSubSubject.name.trim() !== "")
-                                        subjectArray.push(objSubSubject.name.toLowerCase().trim());
+                                    if (objSubSubject && objSubSubject.name && objSubSubject.name.trim() !== "")
+                                        subjectArray.push(objSubSubject.name?.toLowerCase().trim());
                                 }
-                                searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+                                if (objCountry1.id) searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
 
                                 objIltInfoes.push({
                                     country1: objCountry1,
@@ -2447,7 +2456,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         let objArticle: iltinfo = { id: "", pid: "", pSubId: "", type: "", name: "", shortName: "", ordering: "", url: "" };
                         let objSubject: iltinfo = { id: "", pid: "", pSubId: "", type: "", name: "", shortName: "", ordering: "", url: "" };
                         let objSubSubject: iltinfo = { id: "", pid: "", pSubId: "", type: "", name: "", shortName: "", ordering: "", url: "" };
-                        let cnty1cnty2artsub: string[] | null = dr["iltassociation"] ? dr["iltassociation"].toString().split('|') : null;
+                        let cnty1cnty2artsub: string[] | null = dr["iltassociation"] ? dr["iltassociation"]?.toString().split('|') : null;
 
                         if (cnty1cnty2artsub && cnty1cnty2artsub[0]) {
                             objCountry1.id = cnty1cnty2artsub[0].split('^')[0];
@@ -2458,7 +2467,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             objCountry1.type = "country1";
                             objCountry1.url = Common.GetUrl(objCountry1.name);
                             if (objCountry1.name.trim() !== "")
-                                countries.push(objCountry1.name.toLowerCase().trim());
+                                countries.push(objCountry1.name?.toLowerCase().trim());
                         }
                         if (cnty1cnty2artsub && cnty1cnty2artsub[1]) {
                             if (cnty1cnty2artsub[1].length > 5) {
@@ -2481,13 +2490,13 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objCountry2.url = Common.GetUrl(objCountry2.name);
                             }
                             if (objCountry2.name.trim() !== "")
-                                countries.push(objCountry2.name.toLowerCase().trim());
+                                countries.push(objCountry2.name?.toLowerCase().trim());
                         }
                         if (cnty1cnty2artsub && cnty1cnty2artsub[2]) {
                             if (cnty1cnty2artsub[2].length > 5) {
                                 objArticle.id = cnty1cnty2artsub[2].split('^')[0];
                                 objArticle.name = cnty1cnty2artsub[2].indexOf("#") != -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[0] : cnty1cnty2artsub[2].split('^')[1];
-                                objArticle.pid = objCountry1.id + objCountry2.id;
+                                if (objCountry1.id) objArticle.pid = objCountry1.id + objCountry2.id;
                                 objArticle.shortName = "";
                                 objArticle.ordering = cnty1cnty2artsub[2].indexOf("#") != -1 ? cnty1cnty2artsub[2].split('^')[1].split('#')[1] : "";
                                 objArticle.type = "article";
@@ -2501,7 +2510,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objArticle.url = "";
                             }
                             if (objArticle.name.trim() !== "")
-                                articles.push(objArticle.name.toLowerCase().trim());
+                                articles.push(objArticle.name?.toLowerCase().trim());
                         }
                         if (cnty1cnty2artsub && cnty1cnty2artsub[3]) {
                             if (cnty1cnty2artsub[3].length > 5) {
@@ -2509,7 +2518,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objSubject.name = cnty1cnty2artsub[3].split('^')[1];
                                 objSubject.pSubId = cnty1cnty2artsub[3].split('^')[0].indexOf('-') != -1 ? cnty1cnty2artsub[3].split('^')[0].split('-')[1] : "";
                                 objSubject.shortName = "";
-                                objSubject.ordering = cnty1cnty2artsub[3].split('^')[1].toLowerCase();
+                                objSubject.ordering = cnty1cnty2artsub[3].split('^')[1]?.toLowerCase();
                                 objSubject.type = "subject";
                                 objSubject.url = Common.GetUrl(objSubject.name);
                             } else {
@@ -2521,7 +2530,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objSubject.url = "";
                             }
                             if (objSubject.name.trim() !== "")
-                                subjectArray.push(objSubject.name.toLowerCase().trim());
+                                subjectArray.push(objSubject.name?.toLowerCase().trim());
                         }
                         if (cnty1cnty2artsub && cnty1cnty2artsub[4]) {
                             if (cnty1cnty2artsub[4].length > 5) {
@@ -2529,14 +2538,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                 objSubSubject.pid = objSubject.id;
                                 objSubSubject.name = cnty1cnty2artsub[4].split('^')[1];
                                 objSubSubject.shortName = "";
-                                objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1].toLowerCase();
+                                objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1]?.toLowerCase();
                                 objSubSubject.type = "subsubject";
                                 objSubSubject.url = Common.GetUrl(objSubSubject.name);
                             }
-                            if (objSubSubject.name.trim() !== "")
-                                subjectArray.push(objSubSubject.name.toLowerCase().trim());
+                            if (objSubSubject.name && objSubSubject.name.trim() !== "")
+                                subjectArray.push(objSubSubject.name?.toLowerCase().trim());
                         }
-                        searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+                        if (!!objCountry1.id) searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
 
                         objIltInfoes.push({
                             country1: objCountry1,
@@ -2623,7 +2632,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             const markings = markinginfo.split('|');
 
                             if (markings !== null && markings.length > 1) {
-                                const marking1 = markings[1].replace("&#39;", "'");
+                                const marking1 = markings[1]?.replace("&#39;", "'");
                                 const markingInfo: Markinginfo = {
                                     number: num,
                                     text: markings[0],
@@ -2635,14 +2644,14 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                                     topStoryDesc = marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[0];
                                 }
 
-                                const pmark = marking1.indexOf("@@e") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[1] : "";
+                                const pmark = marking1.indexOf("@@e") !== -1 ? marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1]?.replace('_', ' ').trim().split(new RegExp("@@e", "g"))[1] : "";
                                 const parentmark = marking1.indexOf("@@t") !== -1 ? pmark.split(new RegExp("@@t", "g")) : null;
 
                                 markingInfo.entrydate = marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[0];
-                                markingInfo.updateddate = marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split(new RegExp("@@e", "g"))[0];
+                                markingInfo.updateddate = marking1.split('^')[1].split(new RegExp("##", "g"))[1].split(new RegExp("@@i", "g"))[1].split('~')[1].split('\\')[1]?.replace('_', ' ').trim().split(new RegExp("@@e", "g"))[0];
 
                                 if (parentmark !== null) {
-                                    markingInfo.parentmarking = (parentmark[0] + ", " + parentmark[1]).trim().replace(/^,/, '').toLowerCase();
+                                    markingInfo.parentmarking = (parentmark[0] + ", " + parentmark[1]).trim()?.replace(/^,/, '')?.toLowerCase();
                                 }
 
                                 objMarkingInfoes.push(markingInfo);
@@ -2664,72 +2673,72 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     const lstHeadNotes: Headnote[] = [];
                     let headnotesttext = '';
 
-                    if (!!dr["hn1"].toString()) {
-                        lstHeadNotes.push({ number: 1, text: dr["hn1"].toString() });
-                        headnotesttext += dr["hn1"].toString() + "~~";
+                    if (!!dr["hn1"]?.toString()) {
+                        lstHeadNotes.push({ number: 1, text: dr["hn1"]?.toString() });
+                        headnotesttext += dr["hn1"]?.toString() + "~~";
                     }
-                    if (!!dr["hn2"].toString()) {
-                        lstHeadNotes.push({ number: 2, text: dr["hn2"].toString() });
-                        headnotesttext += dr["hn2"].toString() + "~~";
+                    if (!!dr["hn2"]?.toString()) {
+                        lstHeadNotes.push({ number: 2, text: dr["hn2"]?.toString() });
+                        headnotesttext += dr["hn2"]?.toString() + "~~";
                     }
-                    if (!!dr["hn3"].toString()) {
-                        lstHeadNotes.push({ number: 3, text: dr["hn3"].toString() });
-                        headnotesttext += dr["hn3"].toString() + "~~";
+                    if (!!dr["hn3"]?.toString()) {
+                        lstHeadNotes.push({ number: 3, text: dr["hn3"]?.toString() });
+                        headnotesttext += dr["hn3"]?.toString() + "~~";
                     }
-                    if (!!dr["hn4"].toString()) {
-                        lstHeadNotes.push({ number: 4, text: dr["hn4"].toString() });
-                        headnotesttext += dr["hn4"].toString() + "~~";
+                    if (!!dr["hn4"]?.toString()) {
+                        lstHeadNotes.push({ number: 4, text: dr["hn4"]?.toString() });
+                        headnotesttext += dr["hn4"]?.toString() + "~~";
                     }
-                    if (!!dr["hn5"].toString()) {
-                        lstHeadNotes.push({ number: 5, text: dr["hn5"].toString() });
-                        headnotesttext += dr["hn5"].toString() + "~~";
+                    if (!!dr["hn5"]?.toString()) {
+                        lstHeadNotes.push({ number: 5, text: dr["hn5"]?.toString() });
+                        headnotesttext += dr["hn5"]?.toString() + "~~";
                     }
-                    if (!!dr["hn6"].toString()) {
-                        lstHeadNotes.push({ number: 6, text: dr["hn6"].toString() });
-                        headnotesttext += dr["hn6"].toString() + "~~";
+                    if (!!dr["hn6"]?.toString()) {
+                        lstHeadNotes.push({ number: 6, text: dr["hn6"]?.toString() });
+                        headnotesttext += dr["hn6"]?.toString() + "~~";
                     }
-                    if (!!dr["hn7"].toString()) {
-                        lstHeadNotes.push({ number: 7, text: dr["hn7"].toString() });
-                        headnotesttext += dr["hn7"].toString() + "~~";
+                    if (!!dr["hn7"]?.toString()) {
+                        lstHeadNotes.push({ number: 7, text: dr["hn7"]?.toString() });
+                        headnotesttext += dr["hn7"]?.toString() + "~~";
                     }
-                    if (!!dr["hn8"].toString()) {
-                        lstHeadNotes.push({ number: 8, text: dr["hn8"].toString() });
-                        headnotesttext += dr["hn8"].toString() + "~~";
+                    if (!!dr["hn8"]?.toString()) {
+                        lstHeadNotes.push({ number: 8, text: dr["hn8"]?.toString() });
+                        headnotesttext += dr["hn8"]?.toString() + "~~";
                     }
-                    if (!!dr["hn9"].toString()) {
-                        lstHeadNotes.push({ number: 9, text: dr["hn9"].toString() });
-                        headnotesttext += dr["hn9"].toString() + "~~";
+                    if (!!dr["hn9"]?.toString()) {
+                        lstHeadNotes.push({ number: 9, text: dr["hn9"]?.toString() });
+                        headnotesttext += dr["hn9"]?.toString() + "~~";
                     }
-                    if (!!dr["hn10"].toString()) {
-                        lstHeadNotes.push({ number: 10, text: dr["hn10"].toString() });
-                        headnotesttext += dr["hn10"].toString() + " ";
+                    if (!!dr["hn10"]?.toString()) {
+                        lstHeadNotes.push({ number: 10, text: dr["hn10"]?.toString() });
+                        headnotesttext += dr["hn10"]?.toString() + " ";
                     }
 
                     indexDocument.headnotes = lstHeadNotes;
 
                     //#endregion
+                    console.log('----14');
 
-
-                    if (dr["court"].toString().indexOf("111270000000000009") !== -1) // 111270000000000009^Supreme Court of India^SC
+                    if (dr["court"]?.toString().indexOf("111270000000000009") !== -1) // 111270000000000009^Supreme Court of India^SC
                         indexDocument.documenttypeboost = 5000;
-                    else if (dr["court"].toString().indexOf("111270000000000044") !== -1) // 111270000000000044^High Court^HC
+                    else if (dr["court"]?.toString().indexOf("111270000000000044") !== -1) // 111270000000000044^High Court^HC
                         indexDocument.documenttypeboost = 4500;
-                    else if (dr["court"].toString().indexOf("111270000000000002") !== -1) // 111270000000000002^Authority for Advance Ruling^AAR
+                    else if (dr["court"]?.toString().indexOf("111270000000000002") !== -1) // 111270000000000002^Authority for Advance Ruling^AAR
                         indexDocument.documenttypeboost = 4000;
-                    else if (dr["court"].toString().indexOf("111270000000000007") !== -1) // 111270000000000007^Income Tax Appellate Tribunal^ITAT
+                    else if (dr["court"]?.toString().indexOf("111270000000000007") !== -1) // 111270000000000007^Income Tax Appellate Tribunal^ITAT
                         indexDocument.documenttypeboost = 3500;
                     else
                         indexDocument.documenttypeboost = 3200;
-
+                    // console.log('----15');
                     const headings: string[] = [];
-                    if (!!dr["HeadingSubheading"].toString()) {
-                        const headingSubheadings = dr["HeadingSubheading"].toString().split('$');
+                    if (!!dr["HeadingSubheading"]?.toString()) {
+                        const headingSubheadings = dr["HeadingSubheading"]?.toString().split('$');
                         for (const headsubhead of headingSubheadings) {
                             if (headsubhead.indexOf('|') !== -1) {
                                 if (headsubhead.split('|')[0] !== "")
-                                    headings.push(headsubhead.split('|')[0].toLowerCase().trim());
+                                    headings.push(headsubhead.split('|')[0]?.toLowerCase().trim());
                                 if (headsubhead.split('|')[1] !== "")
-                                    headings.push(headsubhead.split('|')[1].toLowerCase().trim());
+                                    headings.push(headsubhead.split('|')[1]?.toLowerCase().trim());
                             }
                         }
                     }
@@ -2740,40 +2749,43 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             Weight: 16
                         });
                     }
-
+                    console.log('----1ef5');
                     indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(
-                        dr["categoriescentax"].toString().toLowerCase() + " " +
-                        dr["groups"].toString().toLowerCase() + " " +
-                        dr["fullcitation"].toString().toLowerCase() + " " +
-                        dr["partyname1"].toString().toLowerCase() + " " +
-                        dr["partyname2"].toString().toLowerCase() + " appeal no " +
-                        dr["appealno"].toString().toLowerCase() + " " +
-                        Common.StringOnly(dr["counselnameappellant"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["counselnamerespondent"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["judgename"].toString()).toLowerCase() + " " +
-                        dr["documentdate"].toString().toLowerCase() + " " +
-                        Common.StringOnly(dr["court"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["bench"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["benchtype"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["InfavourofText"].toString()).toLowerCase() + " " +
-                        Common.StringOnly(dr["actassociations"].toString()).toLowerCase() + " " +
-                        dr["Heading"].toString().trim() + " " +
-                        dr["subheading"].toString().trim()
+                        dr["categoriescentax"]?.toString()?.toLowerCase() + " " +
+                        dr["groups"]?.toString()?.toLowerCase() + " " +
+                        dr["fullcitation"]?.toString()?.toLowerCase() + " " +
+                        dr["partyname1"]?.toString()?.toLowerCase() + " " +
+                        dr["partyname2"]?.toString()?.toLowerCase() + " appeal no " +
+                        dr["appealno"]?.toString()?.toLowerCase() + " " +
+                        Common.StringOnly(dr["counselnameappellant"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["counselnamerespondent"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["judgename"]?.toString())?.toLowerCase() + " " +
+                        dr["documentdate"]?.toString()?.toLowerCase() + " " +
+                        Common.StringOnly(dr["court"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["bench"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["benchtype"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["InfavourofText"]?.toString())?.toLowerCase() + " " +
+                        Common.StringOnly(dr["actassociations"]?.toString())?.toLowerCase() + " " +
+                        dr["Heading"]?.toString().trim() + " " +
+                        dr["subheading"]?.toString().trim()
                     );
                     indexDocument.headnotestext = headnotesttext + " " + indexDocument.searchboosttext;
-                    indexDocument.shortcontent = dr["shortcontent"].toString().trim();
-
+                    indexDocument.shortcontent = dr["shortcontent"]?.toString().trim();
+                    console.log('----1544');
                     //#region footnote region
                     let fullContent: string = "";
                     const footnotecontent: string[] = [];
 
-                    const doc = new DOMParser().parseFromString(String(dr["fullcontent"]), "text/html");
+                    // const doc = new DOMParser().parseFromString(String(dr["fullcontent"]), "text/html");
+                    const htmlString = String(dr["fullcontent"]);
+                    const dom = new JSDOM(htmlString);
+                    const doc = dom.window.document;
 
                     const isHtmlFootnote: boolean = !!doc.querySelector("div.footprint");
 
                     if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
                         const footprints = doc.querySelectorAll("div.footprint");
-                        footprints.forEach((item) => {
+                        footprints.forEach((item: any) => {
                             item.remove();
                             footnotecontent.push(item.outerHTML);
                         });
@@ -2786,7 +2798,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                             footnotecontent.push(matchfoot);
                         });
 
-                        fullContent = String(dr["fullcontent"]).replace(regexfootnote, "");
+                        fullContent = String(dr["fullcontent"])?.replace(regexfootnote, "");
                     } else {
                         fullContent = String(dr["fullcontent"]);
                     }
@@ -2795,7 +2807,7 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
 
                     //#endregion
 
-
+                    console.log('----1266');
                     //#region remove header tag from full content
                     if (String(dr["fullcontent"]).indexOf("<header>") !== -1) {
                         fullContent = Common.RemovedHeaderTag(fullContent);
@@ -2808,22 +2820,23 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                         indexDocument.xmltag = "";
                     }
                     //#endregion
+                    console.log('----15');
                     //#region wordPhraseIds
                     const wordPhraseIds: string[] = dr["CrossTagging"]
-                        .toString()
+                        ?.toString()
                         .split(" ")
-                        .filter((x) => !!x.trim());
+                        .filter((x: any) => !!x.trim());
                     indexDocument.wordphraseids = wordPhraseIds;
                     //#endregion
                     indexDocument.fullcontent = fullContent.trim().lastIndexOf("</document>") !== -1
-                        ? fullContent.trim().replace(
+                        ? fullContent.trim()?.replace(
                             "</document>",
                             "<div id='xmlmetadata' style='display:none;'>" +
                             indexDocument.searchboosttext +
                             "</div></document>"
                         )
                         : fullContent.lastIndexOf("</html>") !== -1
-                            ? fullContent.trim().replace(
+                            ? fullContent.trim()?.replace(
                                 "</html>",
                                 "<div id='htmmetadata' style='display:none;'>" +
                                 indexDocument.searchboosttext +
@@ -2838,18 +2851,18 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     indexDocument.created_date = new Date(
                         !!dr["created_date"]
                             ? dr["created_date"]
-                                .toString()
+                                ?.toString()
                                 .substring(0, 4) +
                             "-" +
-                            dr["created_date"].toString().substring(4, 2) +
+                            dr["created_date"]?.toString().substring(4, 2) +
                             "-" +
-                            dr["created_date"].toString().substring(6, 2) +
+                            dr["created_date"]?.toString().substring(6, 2) +
                             " " +
-                            dr["created_date"].toString().substring(8, 2) +
+                            dr["created_date"]?.toString().substring(8, 2) +
                             ":" +
-                            dr["created_date"].toString().substring(10, 2) +
+                            dr["created_date"]?.toString().substring(10, 2) +
                             ":" +
-                            dr["created_date"].toString().substring(12, 2)
+                            dr["created_date"]?.toString().substring(12, 2)
                             : "1900-01-01"
                     );
                     const formatteddate =
@@ -2863,18 +2876,18 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     indexDocument.updated_date = new Date(
                         !!dr["UpdatedDate"]
                             ? dr["UpdatedDate"]
-                                .toString()
+                                ?.toString()
                                 .substring(0, 4) +
                             "-" +
-                            dr["UpdatedDate"].toString().substring(4, 2) +
+                            dr["UpdatedDate"]?.toString().substring(4, 2) +
                             "-" +
-                            dr["UpdatedDate"].toString().substring(6, 2) +
+                            dr["UpdatedDate"]?.toString().substring(6, 2) +
                             " " +
-                            dr["UpdatedDate"].toString().substring(8, 2) +
+                            dr["UpdatedDate"]?.toString().substring(8, 2) +
                             ":" +
-                            dr["UpdatedDate"].toString().substring(10, 2) +
+                            dr["UpdatedDate"]?.toString().substring(10, 2) +
                             ":" +
-                            dr["UpdatedDate"].toString().substring(12, 2)
+                            dr["UpdatedDate"]?.toString().substring(12, 2)
                             : "1900-01-01"
                     );
 
@@ -2903,12 +2916,23 @@ async function CaseLawsIndex(dt: any, docType: number, templateid: string): Prom
                     }
 
                     indexDocumentList.push(indexDocument);
+                    console.log('----15');
+
+                    const jsonString = JSON.stringify(indexDocument, null, 2);
+                    const filePath = "result.json"; // You can change the file name and path as needed.
+                    fs.writeFile(filePath, jsonString, "utf8", (err: any) => {
+                        if (err) {
+                            console.error("Error writing to file:", err);
+                        } else {
+                            console.log("JSON data has been written to the file.");
+                        }
+                    });
 
 
                 }
-                catch (ex) {
+                catch (ex: any) {
                     console.error("error: " + dr["mid"] + ex.message);
-                    Common.LogErrorId(dr["mid"].toString());
+                    Common.LogErrorId(dr["mid"]?.toString());
                 }
             }
             console.log("Document Batch No completed: " + i + "\r\n");
@@ -3194,10 +3218,10 @@ async function FormIndex(dt: any, docType: number, templateid: string): Promise<
                     };
 
                     if (dr["url"].toString().toLowerCase().indexOf(".pdf") !== -1 && !!indexDocument && !!indexDocument.filenamepath) {
-                        indexDocument.filenamepath = await Common.UploadPdfFilesOnAmazonS3Bucket(
-                            indexDocument.id,
-                            indexDocument.filenamepath
-                        );
+                        // indexDocument.filenamepath = await Common.UploadPdfFilesOnAmazonS3Bucket(
+                        //     indexDocument.id,
+                        //     indexDocument.filenamepath
+                        // );
                     }
 
                     //indexDocument.filenamepath = new Common().pdfFileManagement(indexDocument.id, indexDocument.filenamepath, "");
@@ -5893,6 +5917,1234 @@ async function ArticleIndex(dt: any, docType: number, templateid: string): Promi
 
         }
     }
+}
+
+async function TreatyIndex(dt: any, docType: number, templateid: string) {
+    let indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 1000; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+
+    for (let i = 0; i < totalBatches; i++) {
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable()?.slice(i * batchSize, (i + 1) * batchSize);
+        if (dataRows?.length > 0) {
+            for (const dr of dataRows) {
+                let objSuggest: CompletionField[] = [];
+                // console.log("log start for actid:" + dr["mid"] + "\r\n");
+                try {
+                    let indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = dr["mid"]?.toString().trim() ?? "";
+                    indexDocument.mid = dr["id"]?.toString().trim() ?? "";
+                    indexDocument.templateid = templateid;
+                    indexDocument.documenttype = dr["documenttype"]?.toString().toLowerCase().trim() ?? "";
+                    indexDocument.documentformat = dr["documentformat"]?.toString().toLowerCase().trim() ?? "";
+                    indexDocument.filenamepath = dr["url"]?.toString().trim() ?? "";
+
+                    if (dr["url"]?.toString().toLowerCase().includes(".pdf")) {
+                        indexDocument.filenamepath = this.UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    }
+
+                    try {
+                        this.UploadImageOnAmazonS3BucketCentax(indexDocument.id, indexDocument.mid);
+                    } catch (ex) {
+                        this.LogError(ex, " s3 upload error");
+                    }
+
+                    this.UploadLinkFilesOnS3Centax(indexDocument.mid, "treaty", indexDocument.documentformat, dr["url"]?.toString().trim() ?? "", indexDocument.id);
+
+                    let year: string = dr["groups"]?.toString().substring(dr["groups"]?.toString().lastIndexOf('^') + 1).split('#')[0] ?? "";
+
+                    if (!!year && year.length < 6) {
+                        indexDocument.year = { id: year.replace('|', ' ').trim(), name: year.replace('|', ' ').trim() };
+                    } else {
+                        indexDocument.year = { id: "", name: "" };
+                    }
+
+                    let objMasters: Masterinfo = {} as Masterinfo;
+                    let objMasterInfo: Info = {} as Info;
+                    //#region cat subcat binding
+                    const catSubCatArray = !!dr["categoriescentax"]
+                        ? dr["categoriescentax"].toString().split('$')
+                        : null;
+
+                    if (catSubCatArray !== null) {
+                        const objCatList: Category[] = [];
+
+                        for (const catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+
+                                const isprimarycat: number =
+                                    catsubcat.split('%').length > 1 ? parseInt(catsubcat.split('%')[1]) : 0;
+
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname = catsubcat.split('|');
+                                    const mainCat = catidname[1].trim().split('^')[0].trim();
+
+                                    const isRequiredCategory =
+                                        mainCat.includes("111050000000018392") ||
+                                        mainCat.includes("111050000000018393") ||
+                                        mainCat.includes("111050000000018400") ||
+                                        mainCat.includes("111050000000018768") ||
+                                        mainCat.includes("111050000000018769") ||
+                                        mainCat.includes("111050000000018770") ||
+                                        mainCat.includes("111050000000018771") ||
+                                        mainCat.includes("111050000000018772") ||
+                                        mainCat.includes("111050000000019031");
+
+                                    if (!isRequiredCategory) {
+                                        continue;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname[0].trim().split('^')[0].trim();
+                                            objCat.name = catidname[0].split('^')[1].trim().split('%')[0];
+                                            if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objSubCat.id = catidname[2].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[2].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                        default:
+                                            objSubCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                            break;
+                                    }
+
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0].trim();
+                                    objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                    if (objCat.name) objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+
+                                objCatList.push(objCat);
+                            }
+                        }
+
+                        indexDocument.categories = objCatList;
+                    }
+                    //#endregion
+
+                    //#region Groups binding
+                    var groupSubgroupArray = !!dr["groups"] ? (dr["groups"] as string).split('|') : null;
+
+                    if (groupSubgroupArray != null) {
+                        const objGroups: any = {};
+                        const objSubGroup: any = {};
+                        if (groupSubgroupArray[1]?.indexOf('^') !== -1) {
+                            objSubGroup.id = groupSubgroupArray[1].split('^')[0].trim();
+                            objSubGroup.name = groupSubgroupArray[1].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[1].split('^')[1].split('#')[0].trim() : groupSubgroupArray[1].split('^')[1].trim();
+                            objSubGroup.ordering = groupSubgroupArray[1].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[1].split('^')[1].split('#')[1].trim() : "0";
+
+                            objSubGroup.url = Common.GetUrl(objSubGroup.name.toLowerCase());
+                        }
+                        const objSubSubGroup: any = {};
+                        if (groupSubgroupArray.length > 2 && groupSubgroupArray[2] != null && !!groupSubgroupArray[2]) {
+                            objSubSubGroup.id = groupSubgroupArray[2].split('^')[0].trim();
+                            if (objSubSubGroup.id === "111050000000011236")
+                                objSubSubGroup.name = "Repealed or Old Treaties";
+                            else if (objSubSubGroup.id === "111050000000011126")
+                                objSubSubGroup.name = "Country Treaties";
+                            else
+                                objSubSubGroup.name = groupSubgroupArray[2].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[2].split('^')[1].split('#')[0].trim() : groupSubgroupArray[2].split('^')[1].trim();
+                            objSubSubGroup.ordering = groupSubgroupArray[2].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[2].split('^')[1].split('#')[1].trim() : "0";
+                            objSubSubGroup.url = Common.GetUrl(objSubSubGroup.name.toLowerCase());
+                        }
+                        const objSubSubSubGroup: any = {};
+                        if (groupSubgroupArray.length > 3 && groupSubgroupArray[3] != null && !!groupSubgroupArray[3]) {
+                            objSubSubSubGroup.id = groupSubgroupArray[3].split('^')[0].trim();
+                            objSubSubSubGroup.name = groupSubgroupArray[3].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[3].split('^')[1].split('#')[0].trim() : groupSubgroupArray[3].split('^')[1].trim();
+                            objSubSubSubGroup.ordering = groupSubgroupArray[3].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[3].split('^')[1].split('#')[1].trim() : "0";
+
+                            objSubSubSubGroup.url = Common.GetUrl(objSubSubSubGroup.name.toLowerCase());
+                        }
+                        objSubSubGroup.subsubsubgroup = objSubSubSubGroup;
+                        objSubGroup.subsubgroup = objSubSubGroup;
+                        objGroups.group = { id: groupSubgroupArray[0].split('^')[0].trim(), name: groupSubgroupArray[0].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[0].split('^')[1].split('#')[0].trim() : groupSubgroupArray[0].split('^')[1].trim(), ordering: groupSubgroupArray[0].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[0].split('^')[1].split('#')[1].trim() : "0", url: Common.GetUrl(groupSubgroupArray[0].split('^')[1]?.indexOf('#') !== -1 ? groupSubgroupArray[0].split('^')[1].split('#')[0].trim() : groupSubgroupArray[0].split('^')[1].trim()), subgroup: objSubGroup };
+                        //objSubGroup.subsubgroup =[];
+                        indexDocument.groups = objGroups;
+                    }
+                    //#endregion
+
+                    const hasFile = !!dr["Hasfile"] && (dr["Hasfile"] as string).toLowerCase().indexOf("yes") !== -1 ? "yes" : "no";
+                    var parents = !!dr["ParentHeading"] ? (dr["ParentHeading"] as string).split('$') : null;
+                    if (parents != null && parents[0].length > 15) {
+                        indexDocument.parentheadings = [{ id: parents[0].trim(), name: (dr["ShortName"] as string).trim(), ordering: (dr["ShortName"] as string).toLowerCase().trim(), hasfile: "yes" }];
+                    } else {
+                        indexDocument.parentheadings = [{ id: "000000000000000000", name: "", ordering: "", hasfile: hasFile }];
+                    }
+                    const associates = !!dr["associates"] ? (dr["associates"] as string).split('^') : null;
+                    const objAssociates: any = {};
+                    const objSubjectAssociations: any[] = [];
+                    if (associates != null) {
+                        const objSubjectAssociate: any = {};
+                        objSubjectAssociate.id = associates[0].trim();
+                        objSubjectAssociate.name = associates[1].trim()?.indexOf('#') !== -1 ? associates[1].split('#')[0] : associates[1].trim();
+                        objSubjectAssociate.type = "subject";
+                        objSubjectAssociate.ordering = associates[1].trim()?.indexOf('#') !== -1 ? associates[1].split('#')[1] : "";
+                        objSubjectAssociate.url = Common.GetUrl(objSubjectAssociate.name);
+                        objSubjectAssociate.associatedDocid = "";
+                        objSubjectAssociations.push(objSubjectAssociate);
+                    }
+                    objAssociates.subject = objSubjectAssociations;
+                    indexDocument.associates = objAssociates;
+
+                    indexDocument.documentdate = !!dr["documentdate"]?.toString().split('^')[0] ? dr["documentdate"].toString().split('^')[0] : "19000101";
+                    indexDocument.formatteddocumentdate = new Date(!!indexDocument.documentdate ? indexDocument.documentdate.substring(0, 4) + "-" + indexDocument.documentdate.substring(4, 2) + "-" + indexDocument.documentdate.substring(6, 2) : "1900-01-01");
+                    const headings = !!dr["heading"] ? (dr["heading"] as string).split('|') : null;
+                    if (headings != null) {
+                        if (headings.length === 2 && !!headings[1]?.trim())
+                            indexDocument.heading = (headings[0] + "|" + headings[1]).trim();
+                        else
+                            indexDocument.heading = headings[0].trim();
+                    }
+
+                    indexDocument.subheading = (dr["subheading"] as string)?.trim();
+
+                    if (docType == 8) {
+                        if (dr["groups"].toString().indexOf("111050000000011236^Old Treaties") !== -1)
+                            indexDocument.sortheadingnumber = "40" + (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                        else if (dr["groups"].toString().indexOf("111050000000011127^Model Treaties") !== -1) {
+                            if (indexDocument.id === "108690000000000523" || indexDocument.id === "108690000000000488" || indexDocument.id === "108690000000000524" || indexDocument.id === "108690000000000065" || indexDocument.id === "108690000000000066")
+                                indexDocument.sortheadingnumber = "10" + (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                            else
+                                indexDocument.sortheadingnumber = "30" + (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                        } else if (dr["groups"].toString().indexOf("111050000000011126^Treaties") !== -1) {
+                            indexDocument.sortheadingnumber = "20" + (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                        } else {
+                            indexDocument.sortheadingnumber = (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                        }
+                    } else
+                        indexDocument.sortheadingnumber = (dr["sortheadingnumber"] as string).toLowerCase().trim();
+                    indexDocument.searchheadingnumber = (dr["searchheadingnumber"] as string).toLowerCase().trim();
+                    indexDocument.documenttypeboost = 2000;
+                    indexDocument.url = (dr["url"] as string).toLowerCase().trim();
+                    indexDocument.language = ""; // Convert.ToString(dr["language"]).toLowerCase().trim();
+
+                    //#region Master Info
+
+                    objMasters.info = objMasterInfo;
+                    // indexDocument.masterinfo = objMasters;
+
+                    //#endregion
+
+                    //#region iltinfo
+
+                    //#region citation
+                    const objIltInfoes: Iltinfo[] = [];
+                    const countries: string[] = [];
+                    const articles: string[] = [];
+                    const subjects: string[] = [];
+                    const searchIltCitation: FormattedCitation[] = [];
+                    const yr = indexDocument.year?.id ?? "0000";
+                    if (dr?.["iltassociation"]?.toString()?.indexOf('$') !== -1) {
+                        const citationInfoes: string[] | null = !!dr["iltassociation"] ? dr["iltassociation"].toString().split('$') : null;
+
+                        if (citationInfoes !== null) {
+                            for (const citationInfo of citationInfoes) {
+                                const objFormattedCitation: FormattedCitation = {};
+                                const objCountry1: iltinfo = {};
+                                const objCountry2: iltinfo = {};
+                                const objArticle: iltinfo = {};
+                                const objSubject: iltinfo = {};
+                                const objSubSubject: iltinfo = {};
+                                const objFlag1: iltinfo = {};
+                                const objFlag2: iltinfo = {};
+                                const cnty1cnty2artsub: string[] | null = !!citationInfo ? citationInfo.split('|') : null;
+                                if (cnty1cnty2artsub && cnty1cnty2artsub?.[0] !== null) {
+                                    objCountry1.id = cnty1cnty2artsub[0].split('^')[0];
+                                    objCountry1.name = cnty1cnty2artsub[0].split('^')[1];
+                                    objCountry1.shortName = "";
+                                    objCountry1.ordering = cnty1cnty2artsub[0].split('^')[1]?.toLowerCase() ?? "";
+                                    objCountry1.type = "country1";
+                                    objCountry1.url = Common.GetUrl(objCountry1.name);
+                                    if (!!objCountry1.name?.trim()) countries.push(objCountry1.name.toLowerCase().trim());
+                                }
+                                if (cnty1cnty2artsub && cnty1cnty2artsub?.[1] !== null) {
+                                    if (cnty1cnty2artsub[1].length > 5 && cnty1cnty2artsub[1].split('^')[0] !== "000000000000000000") {
+                                        objCountry2.id = cnty1cnty2artsub[1].split('^')[0];
+                                        objCountry2.pid = objCountry1.id;
+                                        objCountry2.name = cnty1cnty2artsub[1].split('^')[1];
+                                        objCountry2.shortName = "";
+                                        objCountry2.ordering = cnty1cnty2artsub[1].split('^')[1]?.toLowerCase() ?? "";
+                                        objCountry2.type = "country2";
+                                        objCountry2.url = Common.GetUrl(objCountry2.name);
+                                        if (!!objCountry2.name?.trim()) countries.push(objCountry2.name.toLowerCase().trim());
+                                    }
+                                }
+                                if (cnty1cnty2artsub && cnty1cnty2artsub?.length > 2 && cnty1cnty2artsub[2] !== null) {
+                                    if (cnty1cnty2artsub[2].length > 5) {
+                                        objArticle.id = cnty1cnty2artsub[2].split('^')[0];
+                                        objArticle.name = cnty1cnty2artsub[2].split('^')[1].split('#')[0];
+                                        if (objCountry1.id) objArticle.pid = objCountry1.id + objCountry2.id;
+                                        objArticle.shortName = "";
+                                        objArticle.ordering = cnty1cnty2artsub[2].split('^')[1].split('#')[1];
+                                        objArticle.type = "article";
+                                        objArticle.url = Common.GetUrl(objArticle.name);
+                                        if (!!objArticle.name?.trim()) articles.push(objArticle.name.toLowerCase().trim());
+                                    }
+                                }
+                                if (cnty1cnty2artsub && cnty1cnty2artsub?.length > 3 && cnty1cnty2artsub[3] !== null) {
+                                    if (cnty1cnty2artsub[3].length > 5) {
+                                        objSubject.id = cnty1cnty2artsub[3].split('^')[0];
+                                        if (objCountry1.id) objSubject.pid = objCountry1.id + objCountry2.id;
+                                        objSubject.name = cnty1cnty2artsub[3].split('^')[1];
+                                        objSubject.shortName = "";
+                                        objSubject.ordering = cnty1cnty2artsub[3].split('^')[1]?.toLowerCase() ?? "";
+                                        objSubject.type = "subject";
+                                        objSubject.url = Common.GetUrl(objSubject.name);
+                                        if (!!objSubject.name?.trim()) subjects.push(objSubject.name.toLowerCase().trim());
+                                    }
+                                }
+                                if (cnty1cnty2artsub && cnty1cnty2artsub?.length > 4 && cnty1cnty2artsub[4] !== null) {
+                                    if (cnty1cnty2artsub[4].length > 5) {
+                                        objSubSubject.id = cnty1cnty2artsub[4].split('^')[0];
+                                        objSubSubject.pid = objSubject.id;
+                                        objSubSubject.name = cnty1cnty2artsub[4].split('^')[1];
+                                        objSubSubject.shortName = "";
+                                        objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1]?.toLowerCase() ?? "";
+                                        objSubSubject.type = "subsubject";
+                                        objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                                        if (!!objSubSubject.name?.trim()) subjects.push(objSubSubject.name.toLowerCase().trim());
+                                    }
+                                }
+                                const flags = !!dr["flaginfo"] ? dr["flaginfo"].toString().split('|') : null;
+                                if (flags !== null && flags.length === 2) {
+                                    objFlag1.id = flags[0].trim();
+                                    objFlag1.name = flags[0].toUpperCase().trim().replace("'", "");
+                                    objFlag1.ordering = flags[0].toLowerCase().trim().replace("'", "");
+                                    objFlag1.url = flags[0].toLowerCase().trim().replace("'", "");
+                                    objFlag1.orderInteger = 0;
+                                    objFlag2.id = flags[1].trim();
+                                    objFlag2.name = flags[1].toUpperCase().trim().replace("'", "");
+                                    objFlag2.ordering = flags[1].toLowerCase().trim().replace("'", "");
+                                    objFlag2.url = flags[1].toLowerCase().trim().replace("'", "");
+                                    objFlag2.orderInteger = 0;
+                                }
+                                const cnty2Id = objCountry2.id ?? "000000000000000000";
+                                const artId = objArticle.id ?? "000000000000000000";
+                                const subId = objSubject.id ?? "000000000000000000";
+                                const subSubId = objSubSubject.id ?? "000000000000000000";
+                                searchIltCitation.push({ name: objCountry1.id + cnty2Id + artId + subId + subSubId + yr });
+
+                                objIltInfoes.push({ country1: objCountry1, country2: objCountry2, article: objArticle, subject: objSubject, subsubject: objSubSubject, flag1: objFlag1, flag2: objFlag2 });
+                            }
+                        }
+                    } else {
+                        const objFormattedCitation: FormattedCitation = {};
+                        const objCountry1: iltinfo = {};
+                        const objCountry2: iltinfo = {};
+                        const objArticle: iltinfo = {};
+                        const objSubject: iltinfo = {};
+                        const objSubSubject: iltinfo = {};
+                        const objFlag1: iltinfo = {};
+                        const objFlag2: iltinfo = {};
+                        const cnty1cnty2artsub: string[] | null = !!dr?.["iltassociation"] ? dr["iltassociation"].toString().split('|') : null;
+                        if (cnty1cnty2artsub !== null) {
+                            if (cnty1cnty2artsub?.[0] !== null) {
+                                objCountry1.id = cnty1cnty2artsub[0].split('^')[0];
+                                objCountry1.name = cnty1cnty2artsub[0].split('^')[1];
+                                objCountry1.shortName = "";
+                                objCountry1.ordering = cnty1cnty2artsub[0].split('^')[1]?.toLowerCase() ?? "";
+                                objCountry1.type = "country1";
+                                objCountry1.url = Common.GetUrl(objCountry1.name);
+                                if (!!objCountry1.name?.trim()) countries.push(objCountry1.name.toLowerCase().trim());
+                            }
+                            if (cnty1cnty2artsub?.[1] !== null) {
+                                if (cnty1cnty2artsub[1].length > 5 && cnty1cnty2artsub[1].split('^')[0] !== "000000000000000000") {
+                                    objCountry2.id = cnty1cnty2artsub[1].split('^')[0];
+                                    objCountry2.pid = objCountry1.id;
+                                    objCountry2.name = cnty1cnty2artsub[1].split('^')[1].trim();
+                                    objCountry2.shortName = "";
+                                    objCountry2.ordering = cnty1cnty2artsub[1].split('^')[1]?.toLowerCase() ?? "";
+                                    objCountry2.type = "country2";
+                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                    if (!!objCountry2.name?.trim()) countries.push(objCountry2.name.toLowerCase().trim());
+                                }
+                            }
+                            if (cnty1cnty2artsub?.length > 2 && cnty1cnty2artsub[2] !== null) {
+                                if (objArticle && cnty1cnty2artsub[2].length > 5) {
+                                    objArticle.id = cnty1cnty2artsub[2].split('^')[0];
+                                    objArticle.name = cnty1cnty2artsub[2].split('^')[1].split('#')[0];
+                                    objArticle.shortName = "";
+                                    objArticle.ordering = cnty1cnty2artsub[2].split('^')[1].split('#')[1];
+                                    objArticle.type = "article";
+                                    objArticle.url = Common.GetUrl(objArticle.name);
+                                    if (!!objArticle.name?.trim()) articles.push(objArticle.name.toLowerCase().trim());
+                                }
+                            }
+                            if (cnty1cnty2artsub?.length > 3 && cnty1cnty2artsub[3] !== null) {
+                                if (cnty1cnty2artsub[3].length > 5) {
+                                    objSubject.id = cnty1cnty2artsub[3].split('^')[0];
+                                    objSubject.name = cnty1cnty2artsub[3].split('^')[1];
+                                    objSubject.shortName = "";
+                                    objSubject.ordering = cnty1cnty2artsub[3].split('^')[1]?.toLowerCase() ?? "";
+                                    objSubject.type = "subject";
+                                    objSubject.url = Common.GetUrl(objSubject.name);
+                                    if (!!objSubject.name?.trim()) subjects.push(objSubject.name.toLowerCase().trim());
+                                }
+                            }
+                            if (cnty1cnty2artsub?.length > 4 && cnty1cnty2artsub[4] !== null) {
+                                if (cnty1cnty2artsub[4].length > 5) {
+                                    objSubSubject.id = cnty1cnty2artsub[4].split('^')[0];
+                                    objSubSubject.pid = objSubject.id;
+                                    objSubSubject.name = cnty1cnty2artsub[4].split('^')[1];
+                                    objSubSubject.shortName = "";
+                                    objSubSubject.ordering = cnty1cnty2artsub[4].split('^')[1]?.toLowerCase() ?? "";
+                                    objSubSubject.type = "subsubject";
+                                    objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                                    if (!!objSubSubject.name?.trim()) subjects.push(objSubSubject.name.toLowerCase().trim());
+                                }
+                            }
+                            const flags = !!dr?.["flaginfo"] ? dr["flaginfo"].toString().split('|') : null;
+                            if (flags !== null && flags.length === 2) {
+                                objFlag1.id = flags[0].trim();
+                                objFlag1.name = flags[0].toUpperCase().trim().replace("'", "");
+                                objFlag1.ordering = flags[0].toLowerCase().trim().replace("'", "");
+                                objFlag1.url = flags[0].toLowerCase().trim().replace("'", "");
+                                objFlag1.orderInteger = 0;
+                                objFlag2.id = flags[1].trim();
+                                objFlag2.name = flags[1].toUpperCase().trim().replace("'", "");
+                                objFlag2.ordering = flags[1].toLowerCase().trim().replace("'", "");
+                                objFlag2.url = flags[1].toLowerCase().trim().replace("'", "");
+                                objFlag2.orderInteger = 0;
+                            }
+                            const cnty2Id = objCountry2.id ?? "000000000000000000";
+                            const artId = objArticle.id ?? "000000000000000000";
+                            const subId = objSubject.id ?? "000000000000000000";
+                            const subSubId = objSubSubject.id ?? "000000000000000000";
+                            searchIltCitation.push({ name: objCountry1.id + cnty2Id + artId + subId + subSubId + yr });
+
+                            objIltInfoes.push({ country1: objCountry1, country2: objCountry2, article: objArticle, subject: objSubject, subsubject: objSubSubject, flag1: objFlag1, flag2: objFlag2 });
+                        }
+                    }
+
+                    // objCitations.journal = objJournals;
+                    // objCitations.volume = objVolumes
+                    // objCitations.page = objPages;
+                    // objMasters.citations = objCitations;
+                    // Masterinfo objMaster = new Masterinfo();
+                    // objMaster.info = objMasterInfo;
+                    indexDocument.masterinfo = objMasters;
+                    const objSearchIltCit: SearchIltCitation = { formattediltcitation: searchIltCitation };
+                    indexDocument.searchiltcitation = objSearchIltCit;
+                    if (countries.length > 0) {
+                        objSuggest.push({
+                            Input: countries,
+                            Weight: 8,
+                        });
+                    }
+                    if (articles.length > 0) {
+                        objSuggest.push({
+                            Input: articles,
+                            Weight: 1,
+                        });
+                    }
+                    if (subjects.length > 0) {
+                        objSuggest.push({
+                            Input: subjects,
+                            Weight: 16,
+                        });
+                    }
+                    objMasters.iltinfoes = objIltInfoes;
+                    indexDocument.masterinfo = objMasters;
+                    //if (!!indexDocument.heading)
+                    //    objSuggest.push(indexDocument.heading.trim());
+                    //if (!!indexDocument.subheading)
+                    //    objSuggest.push(indexDocument.subheading.trim());
+                    indexDocument.Suggest = objSuggest;
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(`${(dr["categoriescentax"]?.toString() ?? "").toLowerCase()} ${(dr["groups"]?.toString() ?? "").toLowerCase()} ${indexDocument.searchheadingnumber ?? ""} ${indexDocument.parentheadings?.[0]?.name?.trim() ?? ""}`);
+                    indexDocument.shortcontent = (dr["shortcontent"]?.toString() ?? "").trim();
+
+                    //#region footnote region
+                    let fullContent = '';
+                    let footnotecontent = '';
+
+                    const doc = document.createElement('div');
+                    doc.innerHTML = dr["fullcontent"]?.toString() ?? "";
+                    const isHtmlFootnote = doc.getElementsByClassName('footprint').length > 0;
+
+                    if (isHtmlFootnote && indexDocument.documentformat === '.htm') {
+                        const footprintElements = doc.getElementsByClassName('footprint');
+                        for (const item of Array.from(footprintElements)) {
+                            item.remove();
+                            footnotecontent += item.outerHTML;
+                        }
+                        fullContent = doc.innerHTML;
+                    } else if ((dr["fullcontent"]?.toString() ?? "").indexOf("<footnote>") !== -1) {
+                        const regexfootnote = /<footnote>(.*?)<\/footnote>/gi;
+                        const matchesfootnote = (dr["fullcontent"]?.toString() ?? "").match(regexfootnote) ?? [];
+                        for (const matchfoot of matchesfootnote) {
+                            footnotecontent += matchfoot;
+                        }
+                        fullContent = (dr["fullcontent"]?.toString() ?? "").replace(regexfootnote, '');
+                    } else {
+                        fullContent = dr["fullcontent"]?.toString() ?? "";
+                    }
+                    indexDocument.footnotecontent = footnotecontent;
+                    //#endregion footnote
+
+                    //#region remove header tag from full content
+                    if ((dr["fullcontent"]?.toString() ?? "").indexOf("<header>") !== -1) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    //#endregion
+
+                    //#region xml meta tag
+                    if ((dr["fullcontent"]?.toString() ?? "").indexOf("<header>") !== -1) {
+                        indexDocument.xmltag = Common.GetMetaTag(dr["fullcontent"]?.toString() ?? "");
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    //#endregion
+
+                    indexDocument.fullcontent = fullContent.trim().lastIndexOf("</document>") !== -1
+                        ? fullContent.trim().replace("</document>", `<div id='xmlmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></document>`)
+                        : fullContent.lastIndexOf("</html>") !== -1
+                            ? fullContent.trim().replace("</html>", `<div id='htmmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></html>`)
+                            : fullContent.trim() + `<div id='nodata' style='display:none;'>${indexDocument.searchboosttext}</div>`;
+
+                    indexDocument.created_date = new Date(`${dr["created_date"]?.toString()?.substring(0, 4)}-${dr["created_date"]?.toString()?.substring(4, 2)}-${dr["created_date"]?.toString()?.substring(6, 2)} ${dr["created_date"]?.toString()?.substring(8, 2)}:${dr["created_date"]?.toString()?.substring(10, 2)}:${dr["created_date"]?.toString()?.substring(12, 2)}`) || new Date("1900-01-01");
+                    const formatteddate = indexDocument.documentdate?.toString() ?? "1900-01-01";
+                    //indexDocument.updated_date = new Date(`${new Date(formatteddate).getFullYear()}-${String(new Date(formatteddate).getMonth() + 1).padStart(2, '0')}-${String(new Date(formatteddate).getDate()).padStart(2, '0')}`);
+                    indexDocument.updated_date = new Date(`${dr["UpdatedDate"]?.toString()?.substring(0, 4)}-${dr["UpdatedDate"]?.toString()?.substring(4, 2)}-${dr["UpdatedDate"]?.toString()?.substring(6, 2)} ${dr["UpdatedDate"]?.toString()?.substring(8, 2)}:${dr["UpdatedDate"]?.toString()?.substring(10, 2)}:${dr["UpdatedDate"]?.toString()?.substring(12, 2)}`) || new Date("1900-01-01");
+
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date();
+                    indexDocument.lastQCDate = new Date();
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+                    indexDocumentList.push(indexDocument);
+
+
+
+                } catch (ex: any) {
+                    Common.LogError(ex, "mid = " + dr["mid"]);
+                    console.log("error:" + dr["mid"] + ex.message);
+                    Common.LogErrorId(dr["mid"]?.toString());
+
+                }
+            }
+            console.log("Document Batch No completed: " + i);
+
+            let status: string = '';
+            // if (indexType === 1) {
+            //     status = await BulkIndexing(indexDocumentList, 'x', IndexLocalPath, IndexName, IndexDocument, docType);
+            // } else {
+            //     status = await BulkIndexing(indexDocumentList, 'x', IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            // }
+        }
+    }
+}
+
+async function CommentaryIndex(dt: any, docType: number, templateid: string): Promise<number> {
+    let indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 50; // magicll
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+    let reccount: number = 0;
+    for (let i: number = 0; i < totalBatches; i++) {
+        indexDocumentList = [];
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, (i + 1) * batchSize);
+        if (dataRows.length > 0) {
+            reccount = dataRows.length;
+            for (const dr of dataRows) {
+                try {
+                    let objSuggest: CompletionField[] = [];
+                    let indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = dr["mid"]?.toString()?.trim();
+                    indexDocument.mid = dr["id"]?.toString()?.trim();
+                    indexDocument.templateid = templateid;
+                    if (!!dr["groups"] && dr["groups"]?.toString()?.includes("111050000000000971^Models & Drafts")) {
+                        indexDocument.documenttype = "form";
+                        indexDocument.documenttypeboost = 7500;
+                    } else if (!!dr["groups"] && dr["groups"]?.toString()?.includes("111050000000000972^Challans")) {
+                        indexDocument.documenttype = "form";
+                        indexDocument.documenttypeboost = 7500;
+                    } else if (!!dr["groups"] && dr["groups"]?.toString()?.includes("111050000000000084")) {
+                        indexDocument.documenttypeboost = 1500;
+                    } else {
+                        indexDocument.documenttype = dr["documenttype"]?.toString()?.toLowerCase()?.trim() || "";
+                        indexDocument.documenttypeboost = 900;
+                    }
+                    indexDocument.documentformat = dr["documentformat"]?.toString()?.toLowerCase()?.trim() || "";
+                    indexDocument.filenamepath = dr["url"]?.toString()?.trim() || "";
+                    if (dr["url"]?.toString()?.toLowerCase()?.includes(".pdf")) {
+                        // indexDocument.filenamepath = new Common().UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    }
+                    Common.UploadLinkFilesOnS3Centax(indexDocument.mid, "commentary", indexDocument.documentformat, dr["url"]?.toString()?.trim() || "", indexDocument.id);
+                    try {
+                        Common.UploadImageOnAmazonS3BucketCentax(indexDocument.id, indexDocument.mid);
+                    } catch (ex) {
+                        Common.LogError(ex, "mid = " + dr["mid"] + " s3 upload error");
+                    }
+                    const year: string = dr["year"]?.toString()?.trim() || "";
+                    if (!!year && year !== "0000") {
+                        indexDocument.year = { id: year.trim(), name: year.trim() };
+                    }
+                    const objMasters: Masterinfo = {} as Masterinfo;
+                    const objMasterInfo: Info = {} as Info;
+
+                    // #region subject master
+                    const caseSubjectArray = !!dr["OtherSubject"] ? dr["OtherSubject"].toString().split("$") : null;
+                    const objsubjects: GenericInfo[] = [];
+
+                    if (caseSubjectArray != null && caseSubjectArray.length > 1) {
+                        for (const association of caseSubjectArray) {
+                            const associations = association.split("|");
+
+                            if (associations != null && associations.length > 1) {
+                                const objSubject: GenericInfo = {} as GenericInfo;
+
+                                const type = associations[0] !== "" ? associations[1].split("^")[0].toLowerCase() : "";
+                                if (type.trim() === "subject") {
+                                    if (!!associations[0]) {
+                                        objSubject.id = associations[0].trim();
+                                        objSubject.type = type;
+                                        objSubject.name = associations[1] !== "" ? associations[1].split("^")[1].split("~")[0] : "";
+                                        objSubject.shortName = "";
+                                        objSubject.ordering = associations[1].split("^")[1].split("~")[1];
+                                        objSubject.orderInteger = 0;
+                                        objSubject.url = Common.GetUrl(objSubject.name.toLowerCase());
+                                        objsubjects.push(objSubject);
+                                        if (!!objSubject.name.trim()) {
+                                            objSuggest.push({
+                                                Input: [objSubject.name.toLowerCase().trim()],
+                                                Weight: 18
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        objMasterInfo.subject = objsubjects;
+                    }
+                    // #endregion
+
+                    // #region act associations
+                    const associationArray = !!dr["DDA_Acts"] ? dr["DDA_Acts"].toString().split("$") : null;
+                    const objAssociates: Associates = {} as Associates;
+
+                    if (associationArray != null && associationArray.length > 1) {
+                        const objActs: GenericInfo[] = [];
+                        const objSections: GenericInfo[] = [];
+                        const objActAssociations: Associate[] = [];
+                        const objSectionAssociations: Associate[] = [];
+
+                        for (const association of associationArray) {
+                            const associations = association.split("|");
+
+                            if (associations != null && associations.length > 1) {
+                                const objAct: GenericInfo = {} as GenericInfo;
+                                const objSection: GenericInfo = {} as GenericInfo;
+                                const objActAssociate: Associate = {} as Associate;
+                                const objSectionAssociate: Associate = {} as Associate;
+                                const actidsecid = associations[0].toString().indexOf("#") !== -1 ? associations[0].toString().trim().split("#") : null;
+                                const type = associations[0] !== "" ? associations[1].split("^")[0].toLowerCase() : "";
+
+                                if (type.trim() === "act") {
+                                    if (!!associations[0]) {
+                                        objAct.id = objActAssociate.id = associations[0].trim();
+                                        objAct.type = objActAssociate.type = type;
+                                        objAct.name = objActAssociate.name = associations[1] !== "" ? associations[1].split("^")[1].split("~")[0] : "";
+                                        objAct.shortName = "";
+                                        objAct.ordering = associations[1].split("^")[1].indexOf("~") !== -1 ? associations[1].split("^")[1].split("~")[1] : objAct.name.toLowerCase();
+                                        objAct.orderInteger = 0;
+                                        objActAssociate.associatedDocid = "";
+                                        objAct.url = objActAssociate.url = Common.GetUrl(objActAssociate.name.toLowerCase());
+                                        objActs.push(objAct);
+                                        objActAssociations.push(objActAssociate);
+                                    }
+                                } else {
+                                    let section = associations[1] !== "" ? associations[1].split("^")[1] : "";
+                                    if (!!section && !isNaN(Number(section.substring(0, 1)))) {
+                                        section = "Section - " + section;
+                                    }
+
+
+                                    if (!!associations[0]) {
+                                        objSection.id = objSectionAssociate.id = actidsecid[1];
+                                        objSection.pid = actidsecid[0];
+                                        objSection.type = objSectionAssociate.type = type;
+                                        objSection.name = objSectionAssociate.name = section.indexOf("~") !== -1 ? section.split("~")[0] : section;
+                                        objSection.shortName = "";
+                                        objSection.ordering = section.indexOf("~") !== -1 ? section.split("~")[1] : "";
+                                        objSectionAssociate.associatedDocid = associations[0];
+                                        objSection.url = objSectionAssociate.url = Common.GetUrl(objSectionAssociate.name.toLowerCase());
+                                        objSections.push(objSection);
+                                        objActAssociations.push(objSectionAssociate);
+                                    }
+                                }
+                            }
+                        }
+                        objAssociates.act = objActAssociations;
+                        objAssociates.section = objSectionAssociations;
+                        // indexDocument.associates = objAssociates;
+                        objMasterInfo.act = objActs;
+                        objMasterInfo.section = objSections;
+                    }
+                    // #endregion
+
+                    // #region aaa association binding
+                    const asindases = !!dr["AAAAssociation"] ? dr["AAAAssociation"].toString().split("$") : null;
+                    // const aaagroup = !!dr["AAAGroupAssociation"] ? dr["AAAGroupAssociation"].toString().substring(dr["AAAGroupAssociation"].toString().lastIndexOf("AAAGP") + 5) : "";
+
+                    if (asindases != null) {
+                        const objstandardsinfoes: GenericInfo[] = [];
+                        const objsubstandardsinfoes: GenericInfo[] = [];
+
+                        for (const asindas of asindases) {
+                            if (!!asindas) {
+                                const asindasinfo = asindas.split('@');
+                                const groupinfo = asindasinfo[1].split('~');
+                                const standardInfo = asindasinfo[0].split('|');
+
+                                if (!!asindasinfo[0].split('|')[0]) {
+                                    const alreadyExist = objstandardsinfoes.some(p => p.id === groupinfo[0]);
+                                    const objstandardinfo: GenericInfo = {} as GenericInfo;
+
+                                    if (!alreadyExist) {
+                                        objstandardinfo.id = groupinfo[0];
+                                        objstandardinfo.type = "standards"; // Type
+                                        objstandardinfo.name = groupinfo[1]; // aaagroup == "111050000000011678" ? "accounting standard" : "ind as";
+                                        objstandardinfo.shortName = objstandardinfo.name;
+                                        objstandardinfo.ordering = objstandardinfo.shortName.toLowerCase();
+                                        objstandardinfo.orderInteger = 0;
+                                        objstandardinfo.url = Common.GetUrl(objstandardinfo.shortName.toLowerCase());
+                                        objstandardsinfoes.push(objstandardinfo);
+                                    }
+
+                                    const objsubstandardinfo: GenericInfo = {} as GenericInfo;
+                                    objsubstandardinfo.id = standardInfo[0].trim();
+                                    objsubstandardinfo.pid = groupinfo[0];
+                                    objsubstandardinfo.type = "substandards"; // Type
+                                    objsubstandardinfo.name = standardInfo[1].replace('^', '-');
+                                    objsubstandardinfo.shortName = objsubstandardinfo.name;
+                                    objsubstandardinfo.ordering = objsubstandardinfo.shortName.toLowerCase();
+                                    objsubstandardinfo.orderInteger = 0;
+                                    objsubstandardinfo.url = Common.GetUrl(standardInfo[1].split('^')[0]);
+                                    objsubstandardsinfoes.push(objsubstandardinfo);
+                                }
+                            }
+                        }
+
+                        objMasterInfo.standards = objstandardsinfoes;
+                        objMasterInfo.substandards = objsubstandardsinfoes;
+                    }
+                    // #endregion end of aaa association binding
+                    objMasters.info = objMasterInfo;
+
+                    // #endregion
+
+                    // #region rule associations
+                    const ruleAssociationArray = !!dr["DDA_Rules"] ? dr["DDA_Rules"].toString().split("$") : null;
+
+                    if (ruleAssociationArray != null && ruleAssociationArray.length > 1) {
+                        const objRuleAssociations: Associate[] = [];
+                        const objRuleNoAssociations: Associate[] = [];
+
+                        for (const association of ruleAssociationArray) {
+                            const associations = association.split("|");
+
+                            if (associations != null && associations.length > 1) {
+                                const objRuleAssociate: Associate = {} as Associate;
+                                const objRulenoAssociate: Associate = {} as Associate;
+                                const ruleidrulenoid = associations[0].toString().indexOf("#") !== -1 ? associations[0].toString().trim().split("#") : null;
+                                const type = associations[0] !== "" ? associations[1].split("^")[0].toLowerCase() : "";
+
+                                if (type.trim() === "rule") {
+                                    if (!!associations[0]) {
+                                        objRuleAssociate.id = associations[0].trim();
+                                        objRuleAssociate.type = type;
+                                        objRuleAssociate.name = associations[1] !== "" ? associations[1].split("^")[1] : "";
+                                        objRuleAssociate.associatedDocid = "";
+                                        objRuleAssociate.url = Common.GetUrl(objRuleAssociate.name.toLowerCase());
+                                        objRuleAssociations.push(objRuleAssociate);
+                                    }
+                                } else {
+                                    let ruleno = associations[1] !== "" ? associations[1].split("^")[1] : "";
+                                    if (!!ruleno && !isNaN(Number(ruleno.substring(0, 1)))) {
+                                        ruleno = "Rule - " + ruleno;
+                                    }
+
+
+                                    if (!!ruleidrulenoid[1]) {
+                                        objRulenoAssociate.id = ruleidrulenoid[1];
+                                        objRulenoAssociate.type = type;
+                                        objRulenoAssociate.name = ruleno;
+                                        objRulenoAssociate.associatedDocid = ruleidrulenoid[0];
+                                        objRulenoAssociate.url = Common.GetUrl(objRulenoAssociate.name.toLowerCase());
+                                        objRuleNoAssociations.push(objRulenoAssociate);
+                                    }
+                                }
+                            }
+                        }
+
+                        objAssociates.rule = objRuleAssociations;
+                        objAssociates.ruleno = objRuleNoAssociations;
+                    }
+
+                    indexDocument.associates = objAssociates;
+                    // #endregion
+
+                    // #region cat subcat binding
+
+                    const catSubCatArray = dr["categoriescentax"] ? String(dr["categoriescentax"]).split('$') : null;
+                    if (catSubCatArray !== null) {
+                        const objCatList: Category[] = [];
+                        for (const catsubcat of catSubCatArray) {
+                            if (catsubcat) {
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+                                const isprimarycat = catsubcat.split('%')?.length > 1 ? Number(catsubcat.split('%')[1]) : 0;
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname = catsubcat.split('|');
+                                    const mainCat = catidname[1].trim().split('^')[0].trim();
+                                    const isRequiredCategory = mainCat.includes("111050000000018392") || mainCat.includes("111050000000018393") || mainCat.includes("111050000000018400") || mainCat.includes("111050000000018768") || mainCat.includes("111050000000018769") || mainCat.includes("111050000000018770") || mainCat.includes("111050000000018771") || mainCat.includes("111050000000018772") || mainCat.includes("111050000000019031");
+                                    if (!isRequiredCategory) {
+                                        continue;
+                                    }
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objCat.name = catidname[1]?.split('^')[1]?.trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objCat.id = Constants.competitionCategoryId;
+                                            objCat.name = Constants.competitionCategory;
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objCat.id = Constants.tpCategoryId;
+                                            objCat.name = Constants.tpCategory;
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objCat.id = Constants.iltCategoryId;
+                                            objCat.name = Constants.iltCategory;
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                        default:
+                                            objCat.id = catidname[0].trim().split('^')[0].trim();
+                                            objCat.name = catidname[0]?.split('^')[1]?.trim().split('%')[0];
+                                            objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                            objCat.isprimarycat = isprimarycat;
+                                            break;
+                                    }
+
+                                    switch (mainCat) {
+                                        case Constants.femaCategoryId:
+                                        case Constants.companyCategoryId:
+                                            objSubCat.id = catidname[2].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[2]?.split('^')[1]?.trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
+                                            break;
+                                        case Constants.competitionCategoryId:
+                                            objSubCat.id = Constants.competitionCategoryId;
+                                            objSubCat.name = Constants.competitionCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
+                                            break;
+                                        case Constants.tpCategoryId:
+                                            objSubCat.id = Constants.tpCategoryId;
+                                            objSubCat.name = Constants.tpCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
+                                            break;
+                                        case Constants.iltCategoryId:
+                                            objSubCat.id = Constants.iltCategoryId;
+                                            objSubCat.name = Constants.iltCategory;
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
+                                            break;
+                                        default:
+                                            objSubCat.id = catidname[1].trim().split('^')[0].trim();
+                                            objSubCat.name = catidname[1]?.split('^')[1]?.trim().split('%')[0];
+                                            objSubCat.url = Common.GetUrl(objSubCat.name?.toLowerCase());
+                                            break;
+                                    }
+
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0]?.trim();
+                                    objCat.name = catsubcat.split('^')[1]?.trim().split('%')[0];
+                                    objCat.url = Common.GetUrl(objCat.name?.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+                                objCatList.push(objCat);
+                            }
+                        }
+                        indexDocument.categories = objCatList;
+                    }
+                    // #endregion
+
+
+                    // #region Groups binding
+
+                    const groupSubgroupArray = !!dr["groups"] ? (String(dr["groups"]).split('|')) : null;
+                    if (!!dr["groups"] && String(dr["groups"]).indexOf("111050000000000971^Models & Drafts") !== -1) {
+                        indexDocument.groups = {
+                            group: {
+                                id: "111050000000000026",
+                                name: "form",
+                                url: "form",
+                                subgroup: {
+                                    id: groupSubgroupArray?.[0]?.split('^')[0],
+                                    name: groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[0]?.trim(),
+                                    ordering: groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[1]?.trim(),
+                                    url: Common.GetUrl(groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[0]?.trim()),
+                                    subsubgroup: {
+                                        id: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[0] : "",
+                                        name: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[0]?.trim() : "",
+                                        ordering: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[1]?.trim() : "",
+                                        url: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? Common.GetUrl(groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[0]?.trim()) : ""
+                                    }
+                                }
+                            }
+                        };
+                    } else if (!!dr["groups"] && String(dr["groups"]).indexOf("111050000000000972^Challans") !== -1) {
+                        indexDocument.groups = {
+                            group: {
+                                id: "111050000000000026",
+                                name: "form",
+                                url: "form",
+                                subgroup: {
+                                    id: groupSubgroupArray?.[0]?.split('^')[0],
+                                    name: groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[0]?.trim(),
+                                    ordering: groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[1]?.trim(),
+                                    url: Common.GetUrl(groupSubgroupArray?.[0]?.split('^')[1]?.split('#')[0]?.trim()),
+                                    subsubgroup: {
+                                        id: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[0] : "",
+                                        name: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[0]?.trim() : "",
+                                        ordering: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[1]?.trim() : "",
+                                        url: groupSubgroupArray?.[1] !== null && groupSubgroupArray?.[1] !== "" ? Common.GetUrl(groupSubgroupArray?.[1]?.split('^')[1]?.split('#')[0]?.trim()) : ""
+                                    }
+                                }
+                            }
+                        };
+                    } else {
+                        if (!!groupSubgroupArray) {
+                            const objGroups: Groups = {};
+                            const objSubGroup: Subgroup = {};
+                            if (groupSubgroupArray[1]?.indexOf('^') !== -1) {
+                                objSubGroup.id = groupSubgroupArray[1]?.split('^')[0]?.trim();
+                                if (objSubGroup.id === "111050000000000153") {
+                                    objSubGroup.name = "DTC Bill, 2010";
+                                } else if (objSubGroup.id === "111050000000017825") {
+                                    objSubGroup.name = "DTC Bill, 2009";
+                                } else if (objSubGroup.id === "111050000000017824") {
+                                    objSubGroup.name = "DTC Reports";
+                                } else {
+                                    objSubGroup.name = groupSubgroupArray[1]?.split('^')[1]?.split('#')[0]?.trim();
+                                }
+                                objSubGroup.ordering = groupSubgroupArray[1]?.split('^')[1]?.split('#')[1]?.trim();
+                                objSubGroup.url = Common.GetUrl(objSubGroup.name?.toLowerCase());
+                            }
+                            const objSubSubGroup: Subsubgroup = {} as Subsubgroup;
+                            if (groupSubgroupArray.length > 2 && groupSubgroupArray[2] !== null && !!groupSubgroupArray[2]) {
+                                objSubSubGroup.id = groupSubgroupArray[2]?.split('^')[0]?.trim();
+                                objSubSubGroup.name = groupSubgroupArray[2]?.split('^')[1]?.split('#')[0]?.trim();
+                                objSubSubGroup.ordering = groupSubgroupArray[2]?.split('^')[1]?.split('#')[1]?.trim();
+                                objSubSubGroup.url = Common.GetUrl(objSubSubGroup.name?.toLowerCase());
+                            }
+                            const objSubSubSubGroup: Subsubsubgroup = {} as Subsubsubgroup;
+                            if (groupSubgroupArray.length > 3 && groupSubgroupArray[3] !== null && !!groupSubgroupArray[3]) {
+                                objSubSubSubGroup.id = groupSubgroupArray[3]?.split('^')[0]?.trim();
+                                if (objSubSubSubGroup.id === "111050000000000108" && indexDocument?.year?.name === "2019") {
+                                    objSubSubSubGroup.name = "Finance Act, 2019";
+                                } else if (objSubSubSubGroup.id === "111050000000000108" && indexDocument?.year?.name === "2020") {
+                                    objSubSubSubGroup.name = "Finance Act, 2020";
+                                } else if (objSubSubSubGroup.id === "111050000000017782") {
+                                    objSubSubSubGroup.name = "Finance (No. 2) Act, 2019";
+                                } else if (objSubSubSubGroup.id === "111050000000017788") {
+                                    objSubSubSubGroup.name = "Taxation Laws (Amendment) Act, 2019";
+                                } else {
+                                    objSubSubSubGroup.name = groupSubgroupArray[3]?.split('^')[1]?.split('#')[0]?.trim();
+                                }
+                                objSubSubSubGroup.ordering = groupSubgroupArray[3]?.split('^')[1]?.split('#')[1]?.trim();
+                                objSubSubSubGroup.url = Common.GetUrl(objSubSubSubGroup.name?.toLowerCase());
+                            }
+                            objSubSubGroup.subsubsubgroup = objSubSubSubGroup;
+                            objSubGroup.subsubgroup = objSubSubGroup;
+                            objGroups.group = {
+                                id: groupSubgroupArray[0]?.split('^')[0]?.trim(),
+                                name: groupSubgroupArray[0]?.split('^')[1]?.split('#')[0]?.trim(),
+                                ordering: groupSubgroupArray[0]?.split('^')[1]?.split('#')[1]?.trim(),
+                                url: Common.GetUrl(groupSubgroupArray[0]?.split('^')[1]?.split('#')[0]?.toLowerCase()?.trim()),
+                                subgroup: objSubGroup
+                            };
+                            //objSubGroup.subsubgroup =[];
+                            indexDocument.groups = objGroups;
+                        }
+                    }
+                    // #endregion group binding
+
+                    indexDocument.documentdate = dr["documentdate"]?.toString().split('^')[0] || "";
+                    indexDocument.formatteddocumentdate = new Date(!!indexDocument.documentdate ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 6)}-${indexDocument.documentdate.substring(6, 8)}` : "1900-01-01");
+                    if ((dr["groups"]?.toString().indexOf("111050000000000153") ?? -1) !== -1 && (dr["year"]?.toString() === "2010")) {
+                        const objSByte = Number(dr["Heading"]?.substring(0, 1));
+                        let section = objSByte ? `Section - ${dr["Heading"]}` : "";
+                        indexDocument.heading = !!dr["heading"] ? section : dr["subheading"]?.toString() || "";
+                    } else {
+                        indexDocument.heading = dr["heading"]?.toString().trim() || dr["subheading"]?.toString() || "";
+                    }
+                    indexDocument.subheading = dr["heading"]?.toString().trim() ? dr["subheading"]?.toString().trim() || "" : "";
+                    indexDocument.sortheading = dr["sortheading"]?.toString().toLowerCase().trim() || "";
+                    indexDocument.sortheadingnumber = dr["sortheadingnumber"]?.toString().toLowerCase().trim() || "";
+                    indexDocument.searchheadingnumber = dr["searchheadingnumber"]?.toString().toLowerCase().trim() || "";
+                    const hasFile = !!dr["ParentFile"]?.toString().toLowerCase().includes("fileyes") ? "yes" : "no";
+                    const parents = (dr["parentidheading"]?.toString().trimStart('|').split('|') ?? "000000000000000000|".split('|'));
+                    if (parents[0]?.split('^')[0]?.length > 15) {
+                        const Pid = parents.length > 1 ? parents[1]?.split('^')[0] : "";
+                        const PName = (parents.length > 1 && parents[1] !== "") ? parents[1]?.split('^')[1]?.indexOf('#') !== -1 ? parents[1]?.split('^')[1]?.split('#')[0] : parents[1]?.split('^')[1] : "";
+                        const Name = parents[0]?.split('^')[1]?.trim() || "";
+                        indexDocument.parentheadings = [
+                            {
+                                id: parents[0]?.split('^')[0]?.trim(),
+                                name: indexDocument?.groups?.group?.subgroup.url !== null && indexDocument?.groups?.group?.subgroup?.url?.includes("direct-tax-code") && year.includes("2010") && Name.toLowerCase().trim().indexOf("schedules") === -1 ? "Chapter " + Name.split('#')[0] : Name.split('#')[0],
+                                ordering: parents[0]?.split('^').length > 1 ? Name.split('#')[1] : "",
+                                orderInteger: parents[0]?.split('^').length > 1 ? parseInt(Name.split('#')[1]) : 0,
+                                hasfile: hasFile,
+                                pid: Pid,
+                                pname: PName,
+                            }
+                        ];
+                        //#region  searchboosttext entry
+                        indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(`${dr["categoriescentax"]?.toString().toLowerCase()} ${dr["groups"]?.toString().toLowerCase()} ${dr["year"]?.toString().toLowerCase()} ${Common.StringOnly(dr["masterinfo"]?.toString().toLowerCase())} ${indexDocument?.parentheadings?.[0]?.name?.trim()} ${indexDocument.heading}`);
+                        // indexDocument.searchboosttextnew = common.RemoveSpecialCharacterWithSpace(`${dr["categoriescentax"]?.toString().toLowerCase()} ${dr["groups"]?.toString().toLowerCase()} ${dr["year"]?.toString().toLowerCase()} ${common.StringOnly(dr["masterinfo"]?.toString().toLowerCase())} ${dr["Heading"]?.toString().trim()} ${dr["subheading"]?.toString().trim()}`);
+                        //#endregion 
+                    }
+                    indexDocument.shortcontent = dr["shortcontent"]?.toString().trim() || "";
+
+                    // #region footnote region
+                    let fullContent: string = "";
+                    const footnotecontent: string[] = [];
+                    const { window } = new JSDOM();
+                    const doc = new window.DOMParser().parseFromString(!!dr["fullcontent"] ? dr["fullcontent"].toString() : "", 'text/html');
+                    const isHtmlFootnote = doc.querySelectorAll("div.footprint").length > 0;
+
+                    if (isHtmlFootnote && indexDocument.documentformat === ".htm") {
+                        const footnoteItems = doc.querySelectorAll("div.footprint");
+                        for (const item of footnoteItems) {
+                            item.remove();
+                            footnotecontent.push(item.outerHTML);
+                        }
+                        fullContent = doc.body.innerHTML;
+                    } else if (!!dr["fullcontent"]?.toString().includes("<footnote>")) {
+                        const regexfootnote = /<footnote>(.*?)<\/footnote>/g;
+                        const matchesfootnote = (!!dr["fullcontent"]?.toString() ? dr["fullcontent"].toString().match(regexfootnote) : []) || [];
+
+                        for (const matchfoot of matchesfootnote) {
+                            footnotecontent.push(matchfoot);
+                        }
+                        fullContent = dr["fullcontent"]?.toString().replace(regexfootnote, "") || "";
+                    } else {
+                        fullContent = dr["fullcontent"]?.toString() || "";
+                    }
+                    indexDocument.footnotecontent = footnotecontent.join('');
+                    // #endregion footnote
+
+                    // #region remove header tag from full content
+                    if (!!dr["fullcontent"]?.toString().includes("<header>")) {
+                        fullContent = Common.RemovedHeaderTag(fullContent);
+                    }
+                    // #endregion
+
+                    // #region xml meta tag
+                    if (!!dr["fullcontent"]?.toString().includes("<header>")) {
+                        indexDocument.xmltag = Common.GetMetaTag(dr["fullcontent"]?.toString() || "");
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    // #endregion
+
+                    indexDocument.fullcontent = fullContent.trim().replace(/<\/document>/, `<div id='xmlmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></document>`)
+                        || fullContent.trim().replace(/<\/html>/, `<div id='htmmetadata' style='display:none;'>${indexDocument.searchboosttext}</div></html>`)
+                        || fullContent.trim() + `<div id='nodata' style='display:none;'>${indexDocument.searchboosttext}</div>`;
+
+                    indexDocument.url = dr["url"]?.toString().toLowerCase().trim() || "";
+                    indexDocument.language = ""; // dr["language"]?.toString().toLowerCase().trim() || "";
+
+                    indexDocument.masterinfo = objMasters;
+                    // ... (continue the rest of the code)
+                    // #region marking info
+                    const markinginfoArray = !!dr["MarkingInfo"] ? dr["MarkingInfo"].toString().split('$') : null;
+                    let topStoryHeading = "";
+                    let topStoryDesc = "";
+
+                    if (markinginfoArray) {
+                        const objMarkingInfoes: Markinginfo[] = [];
+                        let num: number = 0;
+
+                        for (const markinginfo of markinginfoArray) {
+                            num++;
+                            const markings = markinginfo.split('|');
+
+                            if (markings && markings.length > 1) {
+                                const marking1 = markings[1].replace("&#39;", "'");
+                                const markingInfo: Markinginfo = {
+                                    number: num,
+                                    text: markings[0].toLowerCase(),
+                                    image: marking1.split('^')[0],
+                                    entrydate: marking1.split('^')[1].split('##')[1].split('@@i')[1].split('~')[1].split('\\')[0],
+                                    updateddate: marking1.split('^')[1].split('##')[1].split('@@i')[1].split('~')[1].split('\\')[1].replace('_', ' ').trim().split('@@e')[0],
+                                    parentmarking: (marking1.indexOf('@@t') !== -1) ? `${marking1.split('@@t')[0]}, ${marking1.split('@@t')[1]}`.replace(/^,+/, '').toLowerCase() : undefined
+
+
+                                };
+
+                                if (num === 1) {
+                                    topStoryHeading = marking1.split('^')[1].split('##')[0];
+                                    topStoryDesc = marking1.split('^')[1].split('##')[1].split('@@i')[0];
+                                }
+
+                                objMarkingInfoes.push(markingInfo);
+                            }
+                        }
+                        indexDocument.markinginfo = objMarkingInfoes;
+                    } else {
+                        indexDocument.markinginfo = [{ number: 0, text: "", image: "", entrydate: new Date().toLocaleDateString(), updateddate: new Date().toLocaleDateString() }];
+                    }
+                    indexDocument.topstoryheading = topStoryHeading;
+                    indexDocument.topstorydesc = topStoryDesc;
+                    // #endregion end marking info
+
+                    // #region tag info
+                    const taginfoArray = !!dr["TagInfo"] ? dr["TagInfo"].toString().split('$') : null;
+                    if (taginfoArray) {
+                        const objTagInfoes: Taginfo[] = [];
+
+                        for (const taginfo of taginfoArray) {
+                            const tags = taginfo.split('|');
+
+                            for (const tag of tags) {
+                                if (!!tag) {
+                                    const tagInfo: Taginfo = {
+                                        id: tag.split('^')[0],
+                                        name: tag.length > 0 ? tag.split('^')[1] : tag.split('^')[0]
+                                    };
+                                    objTagInfoes.push(tagInfo);
+                                }
+                            }
+                        }
+                        indexDocument.taginfo = objTagInfoes;
+                    } else {
+                        indexDocument.taginfo = [{ id: dr["TagInfo"]?.toString(), name: dr["TagInfo"]?.toString() }];
+                    }
+                    // #endregion
+                    indexDocument.Suggest = objSuggest;
+                    indexDocument.created_date = new Date(!!dr["created_date"]?.toString() && dr["created_date"].toString().length > 12 ? `${dr["created_date"].toString().substring(0, 4)}-${dr["created_date"].toString().substring(4, 6)}-${dr["created_date"].toString().substring(6, 8)} ${dr["created_date"].toString().substring(8, 10)}:${dr["created_date"].toString().substring(10, 12)}:${dr["created_date"].toString().substring(12, 14)}` : "1900-01-01");
+                    const formatteddate = !!indexDocument.documentdate ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 6)}-${indexDocument.documentdate.substring(6, 8)}` : "1900-01-01";
+                    indexDocument.updated_date = new Date(!!dr["UpdatedDate"]?.toString() ? `${dr["UpdatedDate"].toString().substring(0, 4)}-${dr["UpdatedDate"].toString().substring(4, 6)}-${dr["UpdatedDate"].toString().substring(6, 8)} ${dr["UpdatedDate"].toString().substring(8, 10)}:${dr["UpdatedDate"].toString().substring(10, 12)}:${dr["UpdatedDate"].toString().substring(12, 14)}` : "1900-01-01");
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date(new Date().toISOString().substr(0, 10));
+                    indexDocument.lastQCDate = new Date(new Date().toISOString().substr(0, 10));
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 1000;
+                    indexDocument.viewcount = 10;
+                    const filteredCategory: Category[] = [];
+                    if (!!indexDocument.categories)
+                        for (const objCategory of indexDocument?.categories) {
+                            const isRequiredCategory = (objCategory.id === "111050000000018392" || objCategory.id === "111050000000018393" || objCategory.id === "111050000000018400");
+                            objCategory.name = objCategory.name?.replace(/centax /gi, '');
+                            objCategory.name = objCategory.name?.replace(/Centax /g, '');
+                            if (isRequiredCategory) {
+                                filteredCategory.push(objCategory);
+                            }
+                        }
+                    indexDocument.categories = filteredCategory;
+                    indexDocumentList.push(indexDocument);
+
+
+
+                    // (Continued as the rest of the code was not provided)
+                } catch (ex) {
+                    Common.LogError(ex, "mid = " + dr["mid"]);
+                    console.log("error:" + dr["mid"] + ex.message);
+                    Common.LogErrorId(dr["mid"].toString());
+
+                }
+            }
+            console.log("Document Batch No completed:" + i + "\r\n");
+            let status = '';
+            // if (indexType === 1) {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            // } else {
+            //     status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexNameStopword, IndexDocument, docType);
+            // }
+            // Assuming `BulkIndexing` is an asynchronous function that returns a promise
+            // It seems like `GC.Collect()` isn't applicable in TypeScript/JavaScript
+
+        }
+    }
+    return reccount;
 }
 
 

@@ -16,6 +16,7 @@ export interface Subgroup {
     id?: string;
     name?: string;
     url?: string;
+    ordering?: string;
     subsubgroup?: Subsubgroup | null;
 }
 
@@ -24,7 +25,7 @@ export interface Subsubgroup {
     name?: string;
     url?: string;
     ordering?: string;
-    subsubgroup?: Subsubgroup;
+    subsubsubgroup?: Subsubsubgroup;
 }
 
 export interface Subsubsubgroup {
@@ -73,26 +74,26 @@ export interface Citation {
     pageno: citationinfo;
 }
 
-export class Iltinfo {
-    public country1: iltinfo;
-    public country2: iltinfo;
-    public article: iltinfo;
-    public subject: iltinfo;
-    public subsubject: iltinfo;
-    public flag1?: iltinfo;
-    public flag2?: iltinfo;
+export interface Iltinfo {
+    country1?: iltinfo;
+    country2?: iltinfo;
+    article?: iltinfo;
+    subject?: iltinfo;
+    subsubject?: iltinfo;
+    flag1?: iltinfo;
+    flag2?: iltinfo;
 }
 
-export class iltinfo {
-    public id: string;
-    public pid: string;
-    public pSubId: string;
-    public type: string;
-    public name: string;
-    public shortName: string;
-    public ordering: string;
-    public orderInteger?: number | null;
-    public url: string;
+export interface iltinfo {
+    id?: string;
+    pid?: string;
+    pSubId?: string;
+    type?: string;
+    name?: string;
+    shortName?: string;
+    ordering?: string;
+    orderInteger?: number | null;
+    url?: string;
 }
 
 
@@ -192,7 +193,7 @@ export interface SearchIltCitation {
 }
 
 export interface Groups {
-    group: Group;
+    group?: Group;
 }
 
 export interface Year {
