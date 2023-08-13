@@ -8405,5 +8405,736 @@ async function NewsIndex(dt: any, docType: number, templateid: string): Promise<
     }
 }
 
+async function CaseFinderIndex(dt: any, docType: number, templateid: string): Promise<number> {
+    let indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 500; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+    let reccount: number = 0;
+    for (let i = 0; i < totalBatches; i++) {
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, (i + 1) * batchSize);
+        if (dataRows.length > 0) {
+            reccount = dataRows.length;
+            for (const dr of dataRows) {
+                const digestdocs: string[] | null = !!dr["DTDInfo"] ? dr["DTDInfo"].split('|') : null;
+                if (digestdocs !== null) {
+                    for (const doc of digestdocs) {
+                        if (!!doc) {
+                            //List<string> objSuggest = new List<string>();
+                            // #region digest doc creation
+                            //Console.Write("log start for actid:" + dr["mid"]+ "\r\n");
+                            const dtdinfo: string[] = doc.split('@');
+
+                            try {
+                                // string[] subjects = digestmetatags[1].split('#');
+
+                                const iltinfoes: string[] = dtdinfo[0].split('$');
+                                const indexDocument: IndexDocument = {} as IndexDocument;
+                                indexDocument.id = iltinfoes[0].trim();
+                                indexDocument.mid = iltinfoes[0].trim();
+                                indexDocument.templateid = templateid;
+                                indexDocument.caseid = dr["mid"].toString().trim();
+                                indexDocument.documenttype = "digest";
+                                indexDocument.documentformat = dr["documentformat"].toString().toLowerCase().trim();
+                                indexDocument.filenamepath = dr["url"].toString().trim();
+                                const year: string = dr["year"].toString().trim();
+                                if (!!year) {
+                                    indexDocument.year = { id: year.trim(), name: year.trim() };
+                                }
+                                const objMasters: Masterinfo = {} as Masterinfo;
+                                const objMasterInfo: Info = {} as Info;
+                                const objAssociates: Associates = {} as Associates;
+
+                                //#region act associations
+                                const associationArray = !!dr["actassociations"] ? `${dr["actassociations"]}`.split('$') : null;
+                                const objActs: GenericInfo[] = [];
+                                const objSections: GenericInfo[] = [];
+
+                                if (associationArray !== null && associationArray.length > 1) {
+                                    for (const association of associationArray) {
+                                        const associations = association.split('|');
+
+                                        if (associations !== null && associations.length > 1) {
+                                            const objAct: GenericInfo = {};
+                                            const objSection: GenericInfo = {};
+
+                                            const actidsecid = associations[0].indexOf('#') !== -1 ? `${associations[0]}`.trim().split('#') : null;
+                                            const type = associations[0] !== "" ? associations[1].split('^')[0].toLowerCase() : "";
+
+                                            if (type.trim() === "act") {
+                                                if (!!associations[0]) {
+                                                    if (Common.CasePopularActs.hasOwnProperty(`${associations[0]}`.trim())) {
+                                                        const categories = Common.CasePopularActsfinal()[`${associations[0]}`.trim()][1].split(',');
+                                                        objAct.id = `${associations[0]}`.trim();
+                                                        objAct.type = type;
+                                                        objAct.name = associations[1] !== "" ? associations[1].split('^')[1].split('~')[0] : "";
+                                                        objAct.shortName = "";
+                                                        objAct.ordering = associations[1].split('^')[1].split('~')[1];
+                                                        objAct.orderInteger = 0;
+                                                        objAct.url = Common.GetUrl(objAct.name.toLowerCase());
+                                                        objAct.catUrls = categories;
+                                                    } else {
+                                                        const categories = Common.OtherActs()["999999999999999999"][1].split(',');
+                                                        objAct.id = "999999999999999999";
+                                                        objAct.type = type;
+                                                        objAct.name = "Other Acts";
+                                                        objAct.shortName = "";
+                                                        objAct.ordering = "999999999";
+                                                        objAct.orderInteger = 0;
+                                                        objAct.url = Common.GetUrl(objAct.name.toLowerCase());
+                                                        objAct.catUrls = categories;
+                                                    }
+                                                    objActs.push(objAct);
+                                                }
+                                            } else {
+                                                let objSectionOrder: number;
+                                                let section = associations[1] !== "" ? associations[1].split('^')[1] : "";
+                                                if (!!section && !isNaN(parseInt(section.substring(0, 1)))) {
+                                                    section = "Section - " + section;
+                                                }
+                                                if (!!actidsecid && !!actidsecid[1]) {
+                                                    const sectionName = section.indexOf('~') !== -1 ? section.split('~')[0].trim() : section.trim();
+                                                    if (!!sectionName) {
+                                                        if (Common.CasePopularActs.hasOwnProperty(`${actidsecid[0]}`.trim())) {
+                                                            objSection.id = actidsecid[1];
+                                                            objSection.pid = actidsecid[0];
+                                                            objSection.type = type;
+                                                            objSection.name = sectionName;
+                                                            objSection.shortName = "";
+                                                            objSection.ordering = section.indexOf('~') !== -1 ? section.split('~')[1] : "";
+                                                            objSection.orderInteger = 0;
+                                                            objSection.url = Common.GetUrl(objSection.name.toLowerCase());
+                                                        }
+                                                        objSections.push(objSection);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                objMasterInfo.act = objActs;
+                                objMasterInfo.section = objSections;
+                                objMasters.info = objMasterInfo;
+                                //#endregion
+                                //#region cat subcat binding
+                                const catSubCatArray = !!dr["categoriescentax"] ? dr["categoriescentax"].toString().split('$') : null;
+
+                                if (catSubCatArray) {
+                                    const objCatList: Category[] = [];
+
+                                    for (const catsubcat of catSubCatArray) {
+                                        if (!!catsubcat) {
+                                            const objCat: Category = {} as Category;
+                                            const objSubCat: Subcategory = {} as Subcategory;
+
+                                            const isprimarycat: number = catsubcat.split('%').length > 1 ? parseInt(catsubcat.split('%')[1]) : 0;
+
+                                            if (catsubcat.indexOf('|') > 0) {
+                                                const catidname = catsubcat.split('|');
+                                                const mainCat = catidname[1].trim().split('^')[0].trim();
+
+                                                const isRequiredCategory =
+                                                    mainCat.includes("111050000000018392") ||
+                                                    mainCat.includes("111050000000018393") ||
+                                                    mainCat.includes("111050000000018400") ||
+                                                    mainCat.includes("111050000000018768") ||
+                                                    mainCat.includes("111050000000018769") ||
+                                                    mainCat.includes("111050000000018770") ||
+                                                    mainCat.includes("111050000000018771") ||
+                                                    mainCat.includes("111050000000018772") ||
+                                                    mainCat.includes("111050000000019031");
+
+                                                if (!isRequiredCategory) {
+                                                    continue;
+                                                }
+
+                                                switch (mainCat) {
+                                                    case Constants.femaCategoryId:
+                                                    case Constants.companyCategoryId:
+                                                        objCat.id = catidname[1].trim().split('^')[0].trim();
+                                                        objCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                                        objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                                        objCat.isprimarycat = isprimarycat;
+                                                        break;
+                                                    case Constants.competitionCategoryId:
+                                                        objCat.id = Constants.competitionCategoryId;
+                                                        objCat.name = Constants.competitionCategory;
+                                                        objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                                        objCat.isprimarycat = isprimarycat;
+                                                        break;
+                                                    case Constants.tpCategoryId:
+                                                        objCat.id = Constants.tpCategoryId;
+                                                        objCat.name = Constants.tpCategory;
+                                                        objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                                        objCat.isprimarycat = isprimarycat;
+                                                        break;
+                                                    case Constants.iltCategoryId:
+                                                        objCat.id = Constants.iltCategoryId;
+                                                        objCat.name = Constants.iltCategory;
+                                                        objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                                        objCat.isprimarycat = isprimarycat;
+                                                        break;
+                                                    default:
+                                                        objCat.id = catidname[0].trim().split('^')[0].trim();
+                                                        objCat.name = catidname[0].split('^')[1].trim().split('%')[0];
+                                                        objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                                        objCat.isprimarycat = isprimarycat;
+                                                        break;
+                                                }
+
+                                                switch (mainCat) {
+                                                    case Constants.femaCategoryId:
+                                                    case Constants.companyCategoryId:
+                                                        objSubCat.id = catidname[2].trim().split('^')[0].trim();
+                                                        objSubCat.name = catidname[2].split('^')[1].trim().split('%')[0];
+                                                        objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                                        break;
+                                                    case Constants.competitionCategoryId:
+                                                        objSubCat.id = Constants.competitionCategoryId;
+                                                        objSubCat.name = Constants.competitionCategory;
+                                                        objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                                        break;
+                                                    case Constants.tpCategoryId:
+                                                        objSubCat.id = Constants.tpCategoryId;
+                                                        objSubCat.name = Constants.tpCategory;
+                                                        objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                                        break;
+                                                    case Constants.iltCategoryId:
+                                                        objSubCat.id = Constants.iltCategoryId;
+                                                        objSubCat.name = Constants.iltCategory;
+                                                        objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                                        break;
+                                                    default:
+                                                        objSubCat.id = catidname[1].trim().split('^')[0].trim();
+                                                        objSubCat.name = catidname[1].split('^')[1].trim().split('%')[0];
+                                                        objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                                        break;
+                                                }
+
+                                                objCat.subcategory = objSubCat;
+                                            } else {
+                                                objCat.id = catsubcat.split('^')[0].trim();
+                                                objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                                objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                                objCat.isprimarycat = isprimarycat;
+
+                                                objSubCat.id = "";
+                                                objSubCat.name = "";
+                                                objSubCat.url = "";
+                                                objCat.subcategory = objSubCat;
+                                            }
+
+                                            objCatList.push(objCat);
+                                        }
+                                    }
+
+                                    indexDocument.categories = objCatList;
+                                }
+
+                                //#endregion
+
+                                //#region group binding
+                                const groupsArray = !!dr["groups"] ? dr["groups"].toString().replace('|', ' ').trim().split('^') : null;
+                                if (groupsArray) {
+                                    const objGroups: Groups = {
+                                        group: {
+                                            id: groupsArray[0].split('^')[0].trim(),
+                                            name: groupsArray[1].trim(),
+                                            url: Common.GetUrl(groupsArray[1].toLowerCase().trim()),
+                                            subgroup: {
+                                                id: "",
+                                                name: "",
+                                                subsubgroup: null,
+                                                url: ""
+                                            }
+                                        }
+                                    };
+                                    indexDocument.groups = objGroups;
+                                }
+                                //#endregion
+
+                                indexDocument.documentdate = dr["documentdate"].toString().split('^')[0];
+                                indexDocument.heading = `${dr["heading"].toString().trim()}[${dr["documentdate"].toString().split('^')[1]}]`;
+                                indexDocument.subheading = dr["subheading"].toString().trim();
+                                indexDocument.sortheading = dr["sortheading"].toString().toLowerCase().trim();
+                                indexDocument.sortbycourt = dr["sortbycourt"].toString().toLowerCase().trim();
+                                indexDocument.sortbyname = dr["sortbyname"].toString().toLowerCase().trim();
+                                indexDocument.sortbyauthor = dr["sortbyauthor"].toString().toLowerCase().trim();
+                                indexDocument.sortheadingnumber = "";// dr["sortheadingnumber"].toString().toLowerCase().trim();
+                                indexDocument.searchheadingnumber = dr["searchheadingnumber"].toString().toLowerCase().trim();
+                                indexDocument.parentheadings = [{ id: "", name: "", ordering: "" }];
+                                indexDocument.url = dr["url"].toString().toLowerCase().trim();
+                                indexDocument.language = ""; // dr["language"].toString().toLowerCase().trim();
+
+                                //#region Master Info
+                                const objCourtInfoes: GenericInfo[] = [];
+                                const courtInfo = dr["court"].toString().split('^');
+                                if (courtInfo && courtInfo.length > 1) {
+                                    if (!!courtInfo[0]) {
+                                        const objCourtinfo: GenericInfo = {
+                                            id: courtInfo[0].toString().trim(),
+                                            type: "court",
+                                            shortName: courtInfo[1].toString().trim(),
+                                            name: courtInfo[2].toString().trim(),
+                                            ordering: "",
+                                            url: Common.GetUrl(courtInfo?.[2].toString().trim()?.toLowerCase())
+                                        };
+                                        objCourtInfoes.push(objCourtinfo);
+                                    }
+                                }
+                                const objBenchinfoes: GenericInfo[] = [];
+                                const benchInfo = dr["bench"].toString().split('^');
+                                if (benchInfo && benchInfo.length > 1) {
+                                    if (!!benchInfo[0]) {
+                                        const objBenchinfo: GenericInfo = {
+                                            id: benchInfo[0].toString().trim(),
+                                            type: "bench",
+                                            shortName: benchInfo[1].toString().trim(),
+                                            name: benchInfo[2].toString().trim(),
+                                            ordering: "",
+                                            url: Common.GetUrl(benchInfo?.[2].toString().trim()?.toLowerCase())
+                                        };
+                                        objBenchinfoes.push(objBenchinfo);
+                                    }
+                                }
+                                const benchTypeInfoes: GenericInfo[] = [];
+                                const benchTypeInfo = dr["benchtype"].toString().split('^');
+                                if (benchTypeInfo && benchTypeInfo.length > 1 && benchTypeInfo[0].length > 12) {
+                                    if (!!benchTypeInfo[0]) {
+                                        const objBenchTypeinfo: GenericInfo = {
+                                            id: benchTypeInfo[0] ? benchTypeInfo[0].toString().trim() : "",
+                                            type: "benchtype",
+                                            shortName: benchTypeInfo[1] ? benchTypeInfo[1].toString().trim() : "",
+                                            name: benchTypeInfo[2] ? benchTypeInfo[2].toString().trim() : "",
+                                            ordering: "",
+                                            url: benchTypeInfo[2] ? Common.GetUrl(benchTypeInfo?.[2].toString().trim().toLowerCase()) : ""
+                                        }
+                                        benchTypeInfoes.push(objBenchTypeinfo);
+                                    }
+                                }
+                                const objInfavinfoes: GenericInfo[] = [];
+                                const infavInfoes = !!dr["InfavourofText"] ? dr["InfavourofText"].toString().split('|') : null;
+                                if (infavInfoes) {
+                                    for (const infavof of infavInfoes) {
+                                        const objInfavOf: GenericInfo = {
+                                            id: infavof.split('^')[0],
+                                            name: infavof.split('^')[1],
+                                            shortName: "",
+                                            type: "infavourof"
+                                        };
+                                        objInfavinfoes.push(objInfavOf);
+                                    }
+                                }
+
+                                objMasterInfo.court = objCourtInfoes;
+                                objMasterInfo.bench = objBenchinfoes;
+                                objMasterInfo.benchtype = benchTypeInfoes;
+                                objMasterInfo.infavourof = objInfavinfoes;
+                                objMasters.info = objMasterInfo;
+                                // indexDocument.masterinfo = objMasters;
+                                //#endregion
+
+                                //#region citation
+                                const objCitations: Citation[] = [];
+
+                                const searchCitation: FormattedCitation[] = [];
+
+                                if (dr["citation"].toString().indexOf('$') !== -1) {
+                                    const citationInfoes = !!dr["citation"] ? dr["citation"].toString().split('$') : null;
+                                    if (citationInfoes) {
+                                        for (const citationInfo of citationInfoes) {
+                                            const objFormattedCitation: FormattedCitation = {};
+                                            const objYear: citationinfo = {} as citationinfo;
+                                            const objJournal: citationinfo = {} as citationinfo;
+                                            const objVolume: citationinfo = {} as citationinfo;
+                                            const objPage: citationinfo = {} as citationinfo;
+                                            const yearJournalVolumePage = !!citationInfo ? citationInfo.split('|') : null;
+
+                                            if (yearJournalVolumePage[0] !== null) {
+                                                objYear.id = yearJournalVolumePage[0];
+                                                objYear.name = yearJournalVolumePage[0];
+                                                objYear.shortName = yearJournalVolumePage[0];
+                                                objYear.ordering = yearJournalVolumePage[0];
+                                                objYear.type = "year";
+                                                objYear.url = Common.GetUrl(objYear.name);
+                                            }
+                                            // ... Similar conversion for other properties
+
+                                            searchCitation.push({ name: objYear.name + objJournal.id + objVolume.name + objPage.name });
+                                            objCitations.push({ year: objYear, journal: objJournal, volume: objVolume, pageno: objPage });
+                                        }
+                                    }
+                                } else {
+                                    const objCitation: Citation = {} as Citation;
+                                    const objYear: citationinfo = {} as citationinfo;
+                                    const objJournal: citationinfo = {} as citationinfo;
+                                    const objVolume: citationinfo = {} as citationinfo;
+                                    const objPage: citationinfo = {} as citationinfo;
+                                    const objFormattedCitation: FormattedCitation = {};
+                                    const yearJournalVolumePage = !!dr["citation"] ? dr["citation"].toString().split('|') : null;
+
+                                    if (yearJournalVolumePage) {
+                                        if (yearJournalVolumePage[0] !== null) {
+                                            objYear.id = yearJournalVolumePage[0];
+                                            objYear.name = yearJournalVolumePage[0];
+                                            objYear.shortName = yearJournalVolumePage[0];
+                                            objYear.ordering = yearJournalVolumePage[0];
+                                            objYear.type = "year";
+                                            objYear.url = Common.GetUrl(objYear.name);
+                                        }
+                                        // ... Similar conversion for other properties
+
+                                        searchCitation.push({ name: objYear.name + objJournal.id + objVolume.name + objPage.name });
+                                        objCitations.push({ year: objYear, journal: objJournal, volume: objVolume, pageno: objPage });
+                                    }
+                                }
+
+                                objMasters.citations = objCitations;
+                                indexDocument.masterinfo = objMasters;
+
+                                const objSearchCit: SearchCitation = { formattedcitation: searchCitation };
+                                indexDocument.searchcitation = objSearchCit;
+                                //#endregion citation end
+
+                                //#region OtherInfo Addition
+                                const objOtherInfos: Otherinfo = {} as Otherinfo;
+                                const objFullCitations: otherinfo[] = [];
+                                const objJudges: otherinfo[] = [];
+                                const objCounsels: otherinfo[] = [];
+                                const objAppealNos: otherinfo[] = [];
+                                const objAsstYrs: otherinfo[] = [];
+                                const objParties: otherinfo[] = [];
+
+                                if (!!dr["fullcitation"]) {
+                                    const fullcitation = String(dr["fullcitation"]).trim().replace(/\|/g, '/');
+                                    const objFullCitation: otherinfo = {
+                                        id: "",
+                                        name: fullcitation,
+                                        shortName: "",
+                                        type: "fullcitation"
+                                    };
+                                    objFullCitations.push(objFullCitation);
+
+                                    const citations = !!dr["fullcitation"] ? String(dr["fullcitation"]).trim().split('|') : null;
+                                    // if (citations) {
+                                    //     for (const cit of citations) {
+                                    //         if (!!cit) {
+                                    //             objSuggest.push(cit.trim());
+                                    //             objSuggest.push(cit.substring(cit.indexOf(" ")).trim());
+                                    //         }
+                                    //     }
+                                    // }
+                                }
+                                const judgeNames = !!dr["judgename"] ? String(dr["judgename"]).split('|') : null;
+                                if (judgeNames) {
+                                    for (const judge of judgeNames) {
+                                        const judgeParts = judge.split('^');
+                                        const objJudge: otherinfo = {
+                                            id: judgeParts[0],
+                                            name: judgeParts[1],
+                                            shortName: "",
+                                            type: "judge"
+                                        };
+                                        objJudges.push(objJudge);
+                                        // if (!!objJudge.name)
+                                        //     objSuggest.push(objJudge.name.trim());
+                                    }
+                                }
+                                const counselnameappellants = !!dr["counselnameappellant"] ? String(dr["counselnameappellant"]).split('|') : null;
+                                if (counselnameappellants) {
+                                    for (const counsel of counselnameappellants) {
+                                        const counselParts = counsel.split('^');
+                                        const objCounsel: otherinfo = {
+                                            id: counselParts[0],
+                                            name: counselParts[1],
+                                            shortName: "",
+                                            type: "counselnameappellant"
+                                        };
+                                        objCounsels.push(objCounsel);
+                                        // if (!!objCounsel.name.trim())
+                                        //     objSuggest.push(objCounsel.name.trim());
+                                    }
+                                }
+                                const counselnamerespondents = !!dr["counselnamerespondent"] ? String(dr["counselnamerespondent"]).split('|') : null;
+                                if (counselnamerespondents) {
+                                    for (const counsel of counselnamerespondents) {
+                                        const counselParts = counsel.split('^');
+                                        const objCounsel: otherinfo = {
+                                            id: counselParts[0],
+                                            name: counselParts[1],
+                                            shortName: "",
+                                            type: "counselnamerespondent"
+                                        };
+                                        objCounsels.push(objCounsel);
+                                        // if (!!objCounsel.name.trim())
+                                        //     objSuggest.push(objCounsel.name.trim());
+                                    }
+                                }
+                                const appealnos = !!dr["appealno"] ? String(dr["appealno"]).split('|') : null;
+                                if (appealnos) {
+                                    for (const appealno of appealnos) {
+                                        const appealnoParts = appealno.split('^');
+                                        const objappealno: otherinfo = {
+                                            id: appealnoParts[0]?.trim() ?? appealno,
+                                            name: appealnoParts[1]?.trim() ?? appealno,
+                                            shortName: "",
+                                            type: "appealno"
+                                        };
+                                        objAppealNos.push(objappealno);
+                                        // if (!!objappealno.name.trim())
+                                        //     objSuggest.push(objappealno.name.trim());
+                                    }
+                                }
+                                const asstyrs = !!dr["asstyr"] ? String(dr["asstyr"]).split('|') : null;
+                                if (asstyrs) {
+                                    for (const asstyr of asstyrs) {
+                                        if (!!asstyr) {
+                                            const objasstyr: otherinfo = {
+                                                id: asstyr,
+                                                name: asstyr,
+                                                shortName: "",
+                                                type: "asstyr"
+                                            };
+                                            objAsstYrs.push(objasstyr);
+                                            // if (!!objasstyr.name.trim())
+                                            //     objSuggest.push(objasstyr.name.trim());
+                                        }
+                                    }
+                                }
+                                if (!!dr["partyname1"]) {
+                                    const objparty1: otherinfo = {
+                                        id: "",
+                                        name: String(dr["partyname1"]),
+                                        shortName: "",
+                                        type: "partyname1"
+                                    };
+                                    objParties.push(objparty1);
+                                    // if (!!objparty1.name.trim())
+                                    //     objSuggest.push(objparty1.name.trim());
+                                }
+                                if (!!dr["partyname2"]) {
+                                    const objparty2: otherinfo = {
+                                        id: "",
+                                        name: String(dr["partyname2"]),
+                                        shortName: "",
+                                        type: "partyname2"
+                                    };
+                                    objParties.push(objparty2);
+                                    // if (!!objparty2.name.trim())
+                                    //     objSuggest.push(objparty2.name.trim());
+                                }
+                                objOtherInfos.fullcitation = objFullCitations;
+                                objOtherInfos.judge = objJudges;
+                                objOtherInfos.counselname = objCounsels;
+                                objOtherInfos.asstyr = objAsstYrs;
+                                objOtherInfos.appealno = objAppealNos;
+                                objOtherInfos.partyname = objParties;
+                                indexDocument.otherinfo = objOtherInfos;
+                                //#endregion OtherInfo Addition end
+
+                                //#region iltinfo
+                                const objIltInfoes: Iltinfo[] = [];
+                                const searchIltCitation: FormattedCitation[] = [];
+                                let countries = '';
+                                let articles = '';
+                                let subjects = '';
+
+                                for (const iltinfo of iltinfoes) {
+                                    if (iltinfo.indexOf('~') !== -1) {
+                                        const digestmetatags = !!iltinfo ? iltinfo.split('^') : null;
+
+                                        if (digestmetatags) {
+                                            const objFormattedCitation: FormattedCitation = {};
+                                            const objCountry1: iltinfo = {};
+                                            const objCountry2: iltinfo = {};
+                                            const objArticle: iltinfo = {};
+                                            const objSubject: iltinfo = {};
+                                            const objSubSubject: iltinfo = {};
+
+                                            if (digestmetatags[0] !== null) {
+                                                const country1Parts = digestmetatags[0].split('~');
+                                                objCountry1.id = country1Parts[0];
+                                                objCountry1.name = country1Parts[1];
+                                                objCountry1.shortName = '';
+                                                objCountry1.ordering = objCountry1.name.toLowerCase();
+                                                objCountry1.type = 'country1';
+                                                objCountry1.url = Common.GetUrl(objCountry1.name);
+                                                countries += objCountry1.name.trim() + ' ';
+                                                // if (!!objCountry1.name.trim())
+                                                //     objSuggest.push(objCountry1.name.trim());
+                                            }
+
+                                            if (digestmetatags[1] !== null) {
+                                                const country2Parts = digestmetatags[1].split('~');
+                                                if (country2Parts[1].length > 15) {
+                                                    objCountry2.id = country2Parts[0];
+                                                    objCountry2.name = country2Parts[1];
+                                                    objCountry2.shortName = '';
+                                                    objCountry2.ordering = objCountry2.name.toLowerCase();
+                                                    objCountry2.type = 'country2';
+                                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                                } else {
+                                                    objCountry2.id = '000000000000000000';
+                                                    objCountry2.pid = objCountry1.id;
+                                                    objCountry2.name = '';
+                                                    objCountry2.shortName = '';
+                                                    objCountry2.ordering = '';
+                                                    objCountry2.type = 'country2';
+                                                    objCountry2.url = Common.GetUrl(objCountry2.name);
+                                                }
+                                                countries += objCountry2.name.trim() + ' ';
+                                                // if (!!objCountry2.name.trim())
+                                                //     objSuggest.push(objCountry2.name.trim());
+                                            }
+
+                                            if (digestmetatags[2] !== null) {
+                                                const articleParts = digestmetatags[2].split('~');
+                                                if (articleParts[1].length > 15) {
+                                                    objArticle.id = articleParts[0];
+                                                    objArticle.name = articleParts[1].indexOf('#') !== -1 ? articleParts[1].split('#')[0] : articleParts[1];
+                                                    if (objCountry1.id && objCountry2.id) objArticle.pid = objCountry1.id + objCountry2.id;
+                                                    objArticle.shortName = '';
+                                                    objArticle.ordering = articleParts[1].indexOf('#') !== -1 ? articleParts[1].split('#')[1] : '';
+                                                    objArticle.type = 'article';
+                                                    objArticle.url = Common.GetUrl(objArticle.name);
+                                                } else {
+                                                    objArticle.id = '000000000000000000';
+                                                    objArticle.name = '';
+                                                    if (objCountry1.id && objCountry2.id) objArticle.pid = objCountry1.id + objCountry2.id;
+                                                    objArticle.shortName = '';
+                                                    objArticle.ordering = '';
+                                                    objArticle.type = 'article';
+                                                    objArticle.url = '';
+                                                }
+                                                articles += objArticle.name.trim() + ' ';
+                                                // if (!!objArticle.name.trim())
+                                                //     objSuggest.push(objArticle.name.trim());
+                                            }
+
+                                            if (digestmetatags[3] !== null) {
+                                                const subjectParts = digestmetatags[3].split('~');
+                                                if (subjectParts[1].length > 15) {
+                                                    objSubject.id = subjectParts[0];
+                                                    objSubject.name = subjectParts[1];
+                                                    if (objCountry1.id && objCountry2.id) objSubject.pid = objCountry1.id + objCountry2.id;
+                                                    objSubject.pSubId = digestmetatags[5].split('~')[0];
+                                                    objSubject.shortName = '';
+                                                    objSubject.ordering = objSubject.name.toLowerCase();
+                                                    objSubject.type = 'subject';
+                                                    objSubject.url = Common.GetUrl(objSubject.name);
+                                                } else {
+                                                    objSubject.id = '000000000000000000';
+                                                    objSubject.name = '';
+                                                    if (objCountry1.id && objCountry2.id) objSubject.pid = objCountry1.id + objCountry2.id;
+                                                    objSubject.pSubId = '';
+                                                    objSubject.shortName = '';
+                                                    objSubject.ordering = '';
+                                                    objSubject.type = 'subject';
+                                                    objSubject.url = '';
+                                                }
+                                                subjects += objSubject.name.trim() + ' ';
+                                                // if (!!objSubject.name.trim())
+                                                //     objSuggest.push(objSubject.name.trim());
+                                            }
+
+                                            if (digestmetatags[4] !== null) {
+                                                const subSubjectParts = digestmetatags[4].split('~');
+                                                if (subSubjectParts[1].length > 15) {
+                                                    objSubSubject.id = subSubjectParts[0];
+                                                    objSubSubject.name = subSubjectParts[1];
+                                                    if (objCountry1.id && objCountry2.id) objSubSubject.pid = objCountry1.id + objCountry2.id;
+                                                    objSubSubject.pSubId = digestmetatags[5].split('~')[0];
+                                                    objSubSubject.shortName = '';
+                                                    objSubSubject.ordering = objSubSubject.name.toLowerCase();
+                                                    objSubSubject.type = 'subsubject';
+                                                    objSubSubject.url = Common.GetUrl(objSubSubject.name);
+                                                } else {
+                                                    objSubSubject.id = '000000000000000000';
+                                                    if (objCountry1.id && objCountry2.id) objSubSubject.pid = objCountry1.id + objCountry2.id;
+                                                    objSubSubject.pSubId = '';
+                                                    objSubSubject.name = '';
+                                                    objSubSubject.shortName = '';
+                                                    objSubSubject.ordering = '';
+                                                    objSubSubject.type = 'subsubject';
+                                                    objSubSubject.url = '';
+                                                }
+                                                subjects += objSubSubject.name.trim() + ' ';
+                                                // if (!!objSubSubject.name.trim())
+                                                //     objSuggest.push(objSubSubject.name.trim());
+                                            }
+
+                                            if (objCountry1.id && objCountry2.id) searchIltCitation.push({ name: objCountry1.id + objCountry2.id + objArticle.id + objSubject.id + objSubSubject.id });
+                                            objIltInfoes.push({ country1: objCountry1, country2: objCountry2, article: objArticle, subject: objSubject, subsubject: objSubSubject });
+                                        }
+                                    }
+                                }
+
+                                // indexDocument.masterinfo = objMasters;
+                                const objSearchIltCit: SearchIltCitation = { formattediltcitation: searchIltCitation };
+                                indexDocument.searchiltcitation = objSearchIltCit;
+
+                                objMasters.iltinfoes = objIltInfoes;
+                                //#endregion iltinfo end
+
+                                indexDocument.masterinfo = objMasters;
+                                indexDocument.documenttypeboost = 0;
+                                indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(
+                                    `${dr["categoriescentax"]?.toString().toLowerCase() ?? ''} ${dr["groups"]?.toString().toLowerCase() ?? ''} ${dr["fullcitation"]?.toString().toLowerCase() ?? ''} ${dr["partyname1"]?.toString().toLowerCase() ?? ''} ${dr["partyname2"]?.toString().toLowerCase() ?? ''} appeal no ${dr["appealno"]?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["counselnameappellant"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["counselnamerespondent"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["judgename"])?.toString().toLowerCase() ?? ''} ${dr["documentdate"]?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["court"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["bench"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["benchtype"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["InfavourofText"])?.toString().toLowerCase() ?? ''} ${Common.StringOnly(dr["actassociations"])?.toString().toLowerCase() ?? ''} ${dr["Heading"]?.toString().trim() ?? ''} ${dr["subheading"]?.toString().trim() ?? ''} ${countries ?? ''} ${articles ?? ''} ${subjects ?? ''}`
+                                );
+                                indexDocument.shortcontent = dr["shortcontent"]?.toString().trim() ?? '';
+                                indexDocument.fullcontent = dtdinfo[1]?.split('^')[1] ?? '';
+                                indexDocument.tldheading = dtdinfo[1]?.split('^')[0] ?? '';
+                                //indexDocument.tldsubjects = digestmetatags[1]?.split('#')?.toArray();
+                                //indexDocument.Suggest = objSuggest?.asEnumerable();
+                                indexDocument.created_date = new Date(
+                                    `${dr["created_date"]?.toString()?.substring(0, 4)}-${dr["created_date"]?.toString()?.substring(4, 2)}-${dr["created_date"]?.toString()?.substring(6, 2)} ${dr["created_date"]?.toString()?.substring(8, 2)}:${dr["created_date"]?.toString()?.substring(10, 2)}:${dr["created_date"]?.toString()?.substring(12, 2)}` || "1900-01-01"
+                                );
+                                const formatteddate = indexDocument.documentdate ? `${indexDocument.documentdate.substring(0, 4)}-${indexDocument.documentdate.substring(4, 2)}-${indexDocument.documentdate.substring(6, 2)}` : "1900-01-01";
+                                indexDocument.updated_date = new Date(formatteddate);
+
+                                indexDocument.ispublished = true;
+                                indexDocument.lastpublished_date = new Date().toISOString().substring(0, 10);
+                                indexDocument.lastQCDate = new Date().toISOString().substring(0, 10);
+                                indexDocument.isshowonsite = true;
+                                indexDocument.boostpopularity = 1000;
+
+                                const filteredCategory: Category[] = [];
+                                if (indexDocument.categories)
+                                    for (const objCategory of indexDocument?.categories) {
+                                        const isRequiredCategory = (objCategory.id === "111050000000018392" || objCategory.id === "111050000000018393" || objCategory.id === "111050000000018400");
+                                        objCategory.name = objCategory?.name?.replace(/centax /gi, '');
+                                        objCategory.name = objCategory?.name?.replace(/Centax /g, '');
+                                        if (isRequiredCategory) {
+                                            filteredCategory.push(objCategory);
+                                        }
+                                    }
+                                indexDocument.categories = filteredCategory;
+
+                                indexDocumentList.push(indexDocument);
+
+
+                            } catch (ex) {
+                                Common.LogError(ex, "mid = " + dr["mid"]);
+                                console.log("error:" + dr["mid"] + ex.message);
+                                Common.LogErrorId(dr["mid"]?.toString() ?? "");
+
+                            }
+                            //#endregion
+
+                        }
+                    }
+                }
+            }
+            console.log("Document Batch No completed:" + i + "\r\n");
+            // const status = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+            //GC.Collect();
+
+        }
+    }
+    return reccount;
+}
 
 // }

@@ -166,8 +166,8 @@ export interface IndexDocument {
     updated_date?: Date | null;
     formatteddocumentdate?: Date | null;
     ispublished?: boolean;
-    lastpublished_date?: Date | null;
-    lastQCDate?: Date | null;
+    lastpublished_date?: Date | string | null;
+    lastQCDate?: Date | string | null;
     isshowonsite?: boolean;
     boostpopularity?: number;
     viewcount?: number;
