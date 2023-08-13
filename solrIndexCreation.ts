@@ -9137,4 +9137,267 @@ async function CaseFinderIndex(dt: any, docType: number, templateid: string): Pr
     return reccount;
 }
 
+async function AAAModelReportIndex(dt: any, docType: number, templateid: string): Promise<void> {
+    let indexDocumentList: IndexDocument[] = [];
+    const batchSize: number = 5000; // magic
+    const totalBatches: number = Math.ceil(dt.Rows.Count / batchSize);
+    console.log("Total Document Batch Started:" + totalBatches + "\r\n");
+    for (let i = 0; i < totalBatches; i++) {
+        console.log("Document Batch No started:" + i + "\r\n");
+        const dataRows = dt.AsEnumerable().slice(i * batchSize, (i + 1) * batchSize);
+        if (dataRows.length > 0) {
+            for (const dr of dataRows) {
+                try {
+                    const indexDocument: IndexDocument = {} as IndexDocument;
+                    indexDocument.id = `${dr["mid"]}`.trim();
+                    indexDocument.mid = `${dr["id"]}`.trim();
+                    indexDocument.templateid = templateid;
+                    indexDocument.documenttype = `${dr["documenttype"]}`?.toLowerCase()?.trim();
+                    indexDocument.documentformat = `${dr["documentformat"]}`?.toLowerCase()?.trim();
+                    indexDocument.filenamepath = `${dr["url"]}`.trim();
+                    if (dr["url"].toString().toLowerCase().includes(".pdf")) {
+                        indexDocument.filenamepath = new Common.UploadPdfFilesOnAmazonS3Bucket(indexDocument.id, indexDocument.filenamepath);
+                    }
+                    let fullContent: string = "";
+                    // #region remove header tag from full content
+                    if (`${dr["fullcontent"]}`.includes("<header>")) {
+                        fullContent = Common.RemovedHeaderTag(`${dr["fullcontent"]}`);
+                    }
+                    // #endregion
+                    // #region xml meta tag
+                    if (`${dr["fullcontent"]}`.includes("<header>")) {
+                        indexDocument.xmltag = Common.GetMetaTag(`${dr["fullcontent"]}`);
+                    } else {
+                        indexDocument.xmltag = "";
+                    }
+                    // #endregion
+                    indexDocument.fullcontent = fullContent;
+                    // #region html data
+                    if (!!dr["url"].toString()) {
+                        const url: string = `${dr["url"]}` || "";
+                        const filePath: string = System.Configuration.ConfigurationManager.AppSettings["FilePath"] + url.replace(" / ", "\\");
+                        if (!!filePath.trim() && System.IO.File.Exists(filePath)) {
+                            const fullcontent: string = System.IO.File.Exists(filePath) ? System.IO.File.ReadAllText(filePath, System.Text.Encoding.Default) : "";
+                            indexDocument.fullcontent = fullcontent;
+                        }
+                    }
+                    // #endregion
+
+                    const yearidname = !!`${dr["year"]}` ? `${dr["year"]}`.split('^') : null;
+                    if (yearidname !== null) {
+                        indexDocument.year = { id: yearidname[0].trim(), name: yearidname[1].trim() };
+                    } else {
+                        indexDocument.year = { id: "", name: "" };
+                    }
+
+                    // #region category binding
+                    const catSubCatArray = !!`${dr["categoriescentax"]}` ? `${dr["categoriescentax"]}`.split('$') : null;
+                    if (catSubCatArray !== null) {
+                        const objCatList: Category[] = [];
+                        for (const catsubcat of catSubCatArray) {
+                            if (!!catsubcat) {
+                                const objCat: Category = {} as Category;
+                                const objSubCat: Subcategory = {} as Subcategory;
+                                const isprimarycat: number = catsubcat.split('%').length > 1 ? parseInt(catsubcat.split('%')[1]) : 0;
+                                if (catsubcat.indexOf('|') > 0) {
+                                    const catidname = !!catsubcat ? catsubcat.split('|') : null;
+                                    if (catidname?.[1].trim().split('^')[0] === "111050000000017777" || catidname?.[1].trim().split('^')[0] === "111050000000017778") {
+                                        objCat.id = catidname?.[1].trim().split('^')[0].trim();
+                                        objCat.name = catidname?.[1].split('^')[1].trim().split('%')[0];
+                                        objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                        objCat.isprimarycat = isprimarycat;
+                                    } else {
+                                        objCat.id = catidname?.[0].trim().split('^')[0].trim();
+                                        objCat.name = catidname?.[0].split('^')[1].trim().split('%')[0];
+                                        objCat.url = Common.GetUrl(objCat?.name?.toLowerCase());
+                                        objCat.isprimarycat = isprimarycat;
+                                    }
+                                    if (catidname?.[1].trim().split('^')[0] === "111050000000017777" || catidname?.[1].trim().split('^')[0] === "111050000000017778") {
+                                        objSubCat.id = catidname?.[2].trim().split('^')[0].trim();
+                                        objSubCat.name = catidname?.[2].split('^')[1].trim().split('%')[0];
+                                        objSubCat.url = Common.GetUrl(objSubCat.name.toLowerCase());
+                                    } else {
+                                        objSubCat.id = catidname?.[1].trim().split('^')[0].trim();
+                                        objSubCat.name = catidname?.[1].split('^')[1].trim().split('%')[0];
+                                        objSubCat.url = Common.GetUrl(objSubCat?.name?.toLowerCase());
+                                    }
+                                    objCat.subcategory = objSubCat;
+                                } else {
+                                    objCat.id = catsubcat.split('^')[0].trim();
+                                    objCat.name = catsubcat.split('^')[1].trim().split('%')[0];
+                                    objCat.url = Common.GetUrl(objCat.name.toLowerCase());
+                                    objCat.isprimarycat = isprimarycat;
+
+                                    objSubCat.id = "";
+                                    objSubCat.name = "";
+                                    objSubCat.url = "";
+                                    objCat.subcategory = objSubCat;
+                                }
+                                objCatList.push(objCat);
+                            }
+                        }
+                        indexDocument.categories = objCatList;
+                    }
+
+                    //#endregion category
+
+                    // #region Groups binding
+                    const groupSubgroupArray = !!`${dr["groups"]}` ? `${dr["groups"]}`.split('|') : null;
+
+                    if (groupSubgroupArray !== null) {
+                        const objGroups: Groups = {} as Groups;
+                        const objSubGroup: Subgroup = {} as Subgroup;
+                        if (groupSubgroupArray[1].indexOf('^') !== -1) {
+                            objSubGroup.id = groupSubgroupArray[1].split('^')[0].trim();
+                            objSubGroup.name = groupSubgroupArray[1].split('^')[1].split('#')[0].trim();
+                            objSubGroup.ordering = groupSubgroupArray[1].split('^')[1].split('#')[1].trim();
+                            objSubGroup.url = Common.GetUrl(objSubGroup.name.toLowerCase());
+                        }
+                        const objSubSubGroup: Subsubgroup = {} as Subsubgroup;
+                        if (groupSubgroupArray.length > 2 && groupSubgroupArray[2] !== null && !!groupSubgroupArray[2]) {
+                            objSubSubGroup.id = groupSubgroupArray[2].split('^')[0].trim();
+                            objSubSubGroup.name = groupSubgroupArray[2].split('^')[1].split('#')[0].trim();
+                            objSubSubGroup.ordering = groupSubgroupArray[2].split('^')[1].split('#')[1].trim();
+                            objSubSubGroup.url = Common.GetUrl(objSubSubGroup.name.toLowerCase());
+                        }
+                        const objSubSubSubGroup: Subsubsubgroup = {} as Subsubsubgroup;
+                        if (groupSubgroupArray.length > 3 && groupSubgroupArray[3] !== null && !!groupSubgroupArray[3]) {
+                            objSubSubSubGroup.id = groupSubgroupArray[3].split('^')[0].trim();
+                            objSubSubSubGroup.name = groupSubgroupArray[3].split('^')[1].split('#')[0].trim();
+                            objSubSubSubGroup.ordering = groupSubgroupArray[3].split('^')[1].split('#')[1].trim();
+                            objSubSubSubGroup.url = Common.GetUrl(objSubSubSubGroup.name.toLowerCase());
+                        }
+                        objSubSubGroup.subsubsubgroup = objSubSubSubGroup;
+                        objSubGroup.subsubgroup = objSubSubGroup;
+                        objGroups.group = {
+                            id: groupSubgroupArray[0].split('^')[0].trim(),
+                            name: groupSubgroupArray[0].split('^')[1].split('#')[0].trim(),
+                            ordering: groupSubgroupArray[0].split('^')[1].split('#')[1].trim(),
+                            url: Common.GetUrl(groupSubgroupArray[0].split('^')[1].split('#')[0].toLowerCase().trim()),
+                            subgroup: objSubGroup
+                        };
+                        //objSubGroup.subsubgroup =[];
+                        indexDocument.groups = objGroups;
+                    }
+                    // #endregion group binding
+
+                    indexDocument.heading = `${dr["Heading"]}`;
+                    indexDocument.subheading = `${dr["subheading"]}`.trim();
+                    indexDocument.sortheading = "";//`${dr["sortheading"]}`.toLowerCase().trim();
+                    indexDocument.sortheadingnumber = "0";
+
+                    indexDocument.url = `${dr["url"]}`.toLowerCase().trim();
+                    indexDocument.language = "";//`${dr["language"]}`.toLowerCase().trim();
+                    x
+                    // region master info
+                    const objMasters: Masterinfo = {} as Masterinfo;
+                    const objMasterInfo: Info = {} as Info;
+                    const objCompanies: GenericInfo[] = [];
+                    const objIndustries: GenericInfo[] = [];
+                    const objAreas: GenericInfo[] = [];
+                    const objClauses: GenericInfo[] = [];
+                    const objOpinions: GenericInfo[] = [];
+                    const objTopics: GenericInfo[] = [];
+                    const companyIndustry = !!`${dr["associates"]}` ? `${dr["associates"]}`.split('|') : null;
+
+                    if (companyIndustry && companyIndustry?.[1] !== "" && companyIndustry?.[1].length > 15) {
+                        const objCompany: GenericInfo = {} as GenericInfo;
+                        objCompany.id = companyIndustry?.[1].split('^')[0];
+                        objCompany.name = companyIndustry?.[1].split('^')[1];
+                        objCompany.ordering = objCompany?.name?.toLowerCase();
+                        objCompany.url = Common.GetUrl(objCompany.name);
+                        objCompanies.push(objCompany);
+                    }
+                    if (companyIndustry && companyIndustry?.[0] !== "" && companyIndustry?.[0]?.length > 15) {
+                        const objIndustry: GenericInfo = {} as GenericInfo;
+                        objIndustry.id = companyIndustry?.[0].split('^')[0];
+                        objIndustry.name = companyIndustry?.[0].split('^')[1];
+                        objIndustry.ordering = objIndustry?.name?.toLowerCase();
+                        objIndustry.url = Common.GetUrl(objIndustry.name);
+                        objIndustries.push(objIndustry);
+                    }
+                    const areainfo = !!`${dr["AreaID"]}` ? `${dr["AreaID"]}`.split('^') : null;
+
+                    if (areainfo !== null && areainfo[0].length > 15) {
+                        const objArea: GenericInfo = {} as GenericInfo;
+                        objArea.id = areainfo[0];
+                        objArea.name = areainfo[1].split('#')[0];
+                        objArea.ordering = areainfo[1].split('#')[1];
+                        objArea.url = Common.GetUrl(objArea.name);
+                        objAreas.push(objArea);
+                    }
+                    const clauseinfo = !!`${dr["ClauseID"]}` ? `${dr["ClauseID"]}`.split('^') : null;
+
+                    if (clauseinfo !== null && clauseinfo[0].length > 15) {
+                        const objClause: GenericInfo = {} as GenericInfo;
+                        objClause.id = clauseinfo[0];
+                        objClause.name = clauseinfo[1].split('#')[0];
+                        objClause.ordering = clauseinfo[1].split('#')[1];
+                        objClause.url = Common.GetUrl(objClause.name);
+                        objClauses.push(objClause);
+                    }
+                    const opinioninfo = !!`${dr["Opinion"]}` ? `${dr["Opinion"]}`.split('^') : null;
+
+                    if (opinioninfo !== null && opinioninfo[0].length > 15) {
+                        const objOpinion: GenericInfo = {} as GenericInfo;
+                        objOpinion.id = opinioninfo[0];
+                        objOpinion.name = opinioninfo[1].split('#')[0];
+                        objOpinion.ordering = opinioninfo[1].split('#')[1];
+                        objOpinion.url = Common.GetUrl(objOpinion.name);
+                        objOpinions.push(objOpinion);
+                    }
+                    const topicinfo = !!`${dr["Topic"]}` ? `${dr["Topic"]}`.split('^') : null;
+
+                    if (topicinfo !== null && topicinfo[0].length > 15) {
+                        const objTopic: GenericInfo = {} as GenericInfo;
+                        objTopic.id = topicinfo[0];
+                        objTopic.name = topicinfo[1].split('#')[0];
+                        objTopic.ordering = topicinfo[1].split('#')[1];
+                        objTopic.url = Common.GetUrl(objTopic.name);
+                        objTopics.push(objTopic);
+                    }
+                    objMasterInfo.area = objAreas;
+                    objMasterInfo.clause = objClauses;
+                    objMasterInfo.company = objCompanies;
+                    objMasterInfo.industry = objIndustries;
+                    objMasterInfo.opinions = objOpinions;
+                    objMasterInfo.topics = objTopics;
+
+                    objMasters.info = objMasterInfo;
+                    indexDocument.masterinfo = objMasters;
+                    // endregion
+
+                    indexDocument.searchboosttext = Common.RemoveSpecialCharacterWithSpace(`${dr["categoriescentax"]}`.toLowerCase() + " " + `${dr["groups"]}`.toLowerCase() + " " + Common.StringOnly(`${dr["year"]}`).toLowerCase() + " " + Common.StringOnly(`${dr["associates"]}`).toLowerCase() + " " + Common.StringOnly(`${dr["AreaID"]}`).toLowerCase() + " " + Common.StringOnly(`${dr["ClauseID"]}`).toLowerCase() + Common.StringOnly(`${dr["Heading"]}`).toLowerCase() + " " + `${dr["subheading"]}`.toLowerCase());
+                    indexDocument.shortcontent = "";
+
+                    indexDocument.documentdate = `${dr["documentdate"]}`.split('^')[0];
+                    indexDocument.formatteddocumentdate = new Date(!`${indexDocument.documentdate}` ? `${indexDocument.documentdate}`.substring(0, 4) + "-" + `${indexDocument.documentdate}`.substring(4, 2) + "-" + `${indexDocument.documentdate}`.substring(6, 2) : "1900-01-01");
+                    indexDocument.created_date = new Date(!`${dr["created_date"]}` ? `${dr["created_date"]}`.substring(0, 4) + "-" + `${dr["created_date"]}`.substring(4, 2) + "-" + `${dr["created_date"]}`.substring(6, 2) + " " + `${dr["created_date"]}`.substring(8, 2) + ":" + `${dr["created_date"]}`.substring(10, 2) + ":" + `${dr["created_date"]}`.substring(12, 2) : "1900-01-01");
+                    const formatteddate = !`${indexDocument.documentdate}` ? `${indexDocument.documentdate}`.substring(0, 4) + "-" + `${indexDocument.documentdate}`.substring(4, 2) + "-" + `${indexDocument.documentdate}`.substring(6, 2) : "1900-01-01";
+                    indexDocument.updated_date = new Date(formatteddate);
+
+                    indexDocument.ispublished = true;
+                    indexDocument.lastpublished_date = new Date(new Date().toISOString().split('T')[0]);
+                    indexDocument.lastQCDate = new Date(new Date().toISOString().split('T')[0]);
+                    indexDocument.isshowonsite = true;
+                    indexDocument.boostpopularity = 10;
+                    indexDocument.viewcount = 10;
+                    indexDocumentList.push(indexDocument);
+                    // Console.Write("log end for actid:" + dr["mid"]);
+                    // WriteLog.InsertLogMsg("log end for actid:" + dr["mid"]);
+
+                } catch (ex) {
+                    Common.LogError(ex, "mid = " + `${dr["mid"]}`);
+                    console.log("error:" + `${dr["mid"]}` + ex.message);
+                    Common.LogErrorId(`${dr["mid"]}`);
+
+                }
+            }
+            console.log("Document Batch No completed:" + i);
+            // const status: string = await BulkIndexing(indexDocumentList, "x", IndexLocalPath, IndexName, IndexDocument, docType);
+        }
+    }
+}
+
+
 // }
